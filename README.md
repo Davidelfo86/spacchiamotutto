@@ -94,7 +94,7 @@
                 <tr>
                     <td>${i}</td>
                     <td><input type="text" id="nome${j}_${i}" class="nome" autocomplete="off" /></td>
-                    <td><input type="number" inputmode="decimal" id="quota${j}_${i}" class="quota" /></td>
+                    <td><input type="number" inputmode="decimal" id="quota${j}_${i}" class="quota" maxlength="4" /></td>
                 </tr>
             `;
         }
@@ -109,7 +109,7 @@
         return { nomi, quote };
     }
 
-    async function salvaGara(index) {
+    function salvaGara(index) {
         const { nomi, quote } = getGaraData(index);
         if (nomi.includes("") || quote.includes("")) {
             alert("Completa tutti i campi prima di salvare.");
@@ -117,8 +117,8 @@
         }
 
         let gare = JSON.parse(localStorage.getItem("gare") || "[]");
+        // Cerco gara con nomi e quote uguali
         const garaEsistente = gare.find(g => JSON.stringify(g.nomi) === JSON.stringify(nomi) && JSON.stringify(g.quote) === JSON.stringify(quote));
-
         if (garaEsistente) {
             const trisElenco = garaEsistente.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("\n");
             alert(`Questa gara esiste già e ha queste tris vincenti:\n${trisElenco}`);
@@ -129,22 +129,33 @@
             return;
         }
 
-        // Gara nuova: prima analisi AI
+        // Cerco gare con quote uguali ma nomi diversi
+        const gareStesseQuote = gare.filter(g => JSON.stringify(g.quote) === JSON.stringify(quote));
+        if (gareStesseQuote.length > 0) {
+            let messaggio = "⚠️ Attenzione: queste quote sono già presenti in altre gare con nomi differenti.\nEcco le tris vincenti associate:\n";
+            gareStesseQuote.forEach(g => {
+                messaggio += `Tris: ${g.tris.map(t => t.combinazione + " (Quota: " + t.quota + ")").join(" | ")}\n`;
+            });
+            alert(messaggio);
+            inserisciNuovaTris(null, nomi, quote);
+            return;
+        }
+
+        // Gara nuova con quote nuove: faccio analisi AI
         const previsione = analisiAI(nomi, quote, gare);
 
         if (previsione) {
             const confermaPrevisione = confirm(`🧠 Analisi AI:\nTris più frequente tra gare simili: ${previsione.combinazione} (Quota media: ${previsione.quota})\nVuoi salvarla come tris vincente?`);
             if (confermaPrevisione) {
-                // Salvo subito la gara con questa tris
                 const nuovaGara = { nomi, quote, tris: [{ combinazione: previsione.combinazione, quota: previsione.quota }] };
                 gare.push(nuovaGara);
                 localStorage.setItem("gare", JSON.stringify(gare));
                 alert("Gara salvata con tris AI.");
-                return; // fine
+                return;
             }
         }
 
-        // Se qui, o non voleva salvare tris AI, o nessuna previsione trovata:
+        // Se non confermo tris AI o non c'è previsione, chiedo inserimento tris manuale
         inserisciNuovaTris(null, nomi, quote);
     }
 
@@ -166,7 +177,7 @@
 
         const trisStr = trisArray.join(",");
 
-        let gare = JSON.parse(localStorage.getItem("gare") || "[]");
+        const gare = JSON.parse(localStorage.getItem("gare") || "[]");
 
         if (!gara) {
             const nuovaGara = {
@@ -321,8 +332,7 @@
 
     window.addEventListener("DOMContentLoaded", setupAutocomplete);
 
-    // --- AI: Funzione analisi e previsione ---
-
+    // --- Funzione di analisi AI per gare nuove con quote diverse ---
     function analisiAI(nomi, quote, gare) {
         const nuoveQuote = quote.map(q => parseFloat(q));
         const soglia = 0.2;
