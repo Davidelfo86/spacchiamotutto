@@ -186,6 +186,15 @@
 
         localStorage.setItem("gare", JSON.stringify(gare));
         alert("Gara salvata correttamente.");
+
+        // ---- Qui chiamiamo la nuova AI che analizza la gara salvata ----
+        const nuovaGara = {
+            nomi: nomi || gara.nomi,
+            quote: quote || gara.quote,
+            tris: [{ combinazione: trisStr, quota: quotaTris }]
+        };
+        analizzaSimilitudineQuote(nuovaGara);
+        analizzaPatternCavalli(nuovaGara);
     }
 
     function pulisciTabella(index) {
@@ -315,6 +324,142 @@
     }
 
     window.addEventListener("DOMContentLoaded", setupAutocomplete);
+
+    // --- Inizio AI aggiuntiva ---
+
+    // Analizza gare salvate per trovare gare con quote simili (almeno 4 corsie simili)
+    function analizzaSimilitudineQuote(nuovaGara) {
+        const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+        const nuoveQuote = nuovaGara.quote.map(q => parseFloat(q));
+        const soglia = 0.2;
+
+        const gareSimili = gare.filter(g => {
+            let match = 0;
+            for (let i = 0; i < 6; i++) {
+                const q = parseFloat(g.quote[i]);
+                if (Math.abs(q - nuoveQuote[i]) <= soglia) {
+                    match++;
+                }
+            }
+            return match >= 4;
+        });
+
+        if (gareSimili.length === 0) return;
+
+        // Conta tris vincenti tra gare simili
+        const trisMap = {};
+        gareSimili.forEach(g => {
+            g.tris.forEach(t => {
+                if (!trisMap[t.combinazione]) trisMap[t.combinazione] = { count: 0, quote: [] };
+                trisMap[t.combinazione].count++;
+                trisMap[t.combinazione].quote.push(parseFloat(t.quota));
+            });
+        });
+
+        const trisOrdinata = Object.entries(trisMap)
+            .sort((a, b) => b[1].count - a[1].count);
+
+        if (trisOrdinata.length === 0) return;
+
+        const [combinazione, dati] = trisOrdinata[0];
+        const mediaQuota = (dati.quote.reduce((a, b) => a + b, 0) / dati.quote.length).toFixed(2);
+
+        if (confirm(`🧠 Analisi AI: trovate ${gareSimili.length} gare simili (quote in almeno 4 corsie)\nTris più frequente: ${combinazione} (Quota media: ${mediaQuota})\nVuoi salvarla come previsione?`)) {
+            // Inserisce tris come previsione aggiuntiva alla nuova gara salvata
+            aggiungiTrisPrevisione(nuovaGara, combinazione, mediaQuota);
+        }
+    }
+
+    // Analizza combinazioni nome + corsia e frequenza vincite corsie nelle tris
+    function analizzaPatternCavalli(nuovaGara) {
+        const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+
+        // Mappa chiave: "Nome|Corsia" -> { total: n, vincente: m }
+        const cavalliStats = {};
+        // Mappa combinazioni doppie (es. "Mario|3;Aldo|4") -> { total: n, trisConCorsieVincenti: m }
+        const doppieStats = {};
+
+        gare.forEach(g => {
+            // Conta singoli cavalli e corsia
+            g.nomi.forEach((nome, idx) => {
+                const corsia = idx + 1;
+                const key = `${nome}|${corsia}`;
+                if (!cavalliStats[key]) cavalliStats[key] = { total: 0, vincente: 0 };
+                cavalliStats[key].total++;
+
+                // Verifica se questa corsia è presente in qualche tris vincente
+                const vinceQui = g.tris.some(t => {
+                    const corsieTris = t.combinazione.split(",").map(Number);
+                    return corsieTris.includes(corsia);
+                });
+                if (vinceQui) cavalliStats[key].vincente++;
+            });
+
+            // Conta doppie combinazioni (coppie di cavallo|corsia)
+            for (let i = 0; i < 5; i++) {
+                for (let j = i + 1; j < 6; j++) {
+                    const key = `${g.nomi[i]}|${i+1};${g.nomi[j]}|${j+1}`;
+                    if (!doppieStats[key]) doppieStats[key] = { total: 0, vincente: 0 };
+                    doppieStats[key].total++;
+
+                    const vinceQui = g.tris.some(t => {
+                        const corsieTris = t.combinazione.split(",").map(Number);
+                        return corsieTris.includes(i + 1) || corsieTris.includes(j + 1);
+                    });
+                    if (vinceQui) doppieStats[key].vincente++;
+                }
+            }
+        });
+
+        // Ora vediamo se la nuova gara contiene cavalli e doppie con pattern vincenti > 60%
+        const messaggi = [];
+
+        nuovaGara.nomi.forEach((nome, idx) => {
+            const corsia = idx + 1;
+            const key = `${nome}|${corsia}`;
+            const stat = cavalliStats[key];
+            if (stat && stat.total >= 3) { // almeno 3 occorrenze per validità
+                const perc = (stat.vincente / stat.total) * 100;
+                if (perc >= 60) {
+                    messaggi.push(`⚡ Cavallo "${nome}" in corsia ${corsia} ha vinto in ${stat.vincente} su ${stat.total} gare (${perc.toFixed(0)}%)`);
+                }
+            }
+        });
+
+        // Controllo doppie
+        for (let i = 0; i < 5; i++) {
+            for (let j = i + 1; j < 6; j++) {
+                const key = `${nuovaGara.nomi[i]}|${i+1};${nuovaGara.nomi[j]}|${j+1}`;
+                const stat = doppieStats[key];
+                if (stat && stat.total >= 3) {
+                    const perc = (stat.vincente / stat.total) * 100;
+                    if (perc >= 60) {
+                        messaggi.push(`⚡ Coppia "${nuovaGara.nomi[i]}"(corsia ${i+1}) e "${nuovaGara.nomi[j]}"(corsia ${j+1}) vincente nel ${perc.toFixed(0)}% dei casi (${stat.vincente} su ${stat.total})`);
+                    }
+                }
+            }
+        }
+
+        if (messaggi.length > 0) {
+            alert("🧠 Pattern AI rilevati:\n" + messaggi.join("\n"));
+        }
+    }
+
+    // Funzione per aggiungere tris previsione all'ultima gara salvata
+    function aggiungiTrisPrevisione(nuovaGara, combinazione, quota) {
+        const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+        const idx = gare.findIndex(g => JSON.stringify(g.nomi) === JSON.stringify(nuovaGara.nomi) && JSON.stringify(g.quote) === JSON.stringify(nuovaGara.quote));
+        if (idx === -1) return;
+
+        if (!gare[idx].tris.some(t => t.combinazione === combinazione)) {
+            gare[idx].tris.push({ combinazione: combinazione, quota: quota });
+            localStorage.setItem("gare", JSON.stringify(gare));
+            alert(`✅ Previsione tris "${combinazione}" aggiunta alla gara salvata.`);
+        } else {
+            alert("La previsione tris è già presente nella gara.");
+        }
+    }
+    // --- Fine AI aggiuntiva ---
 </script>
 </body>
 </html>
