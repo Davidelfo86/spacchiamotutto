@@ -5,7 +5,7 @@
     <title>Archivio Gare Cavalli</title>
     <style>
         body {
-            font-family: Arial, sans- serif;
+            font-family: Arial, sans-serif;
             padding: 20px;
         }
         .gara-container {
@@ -94,7 +94,7 @@
                 <tr>
                     <td>${i}</td>
                     <td><input type="text" id="nome${j}_${i}" class="nome" autocomplete="off" /></td>
-                    <td><input type="number" inputmode="decimal" id="quota${j}_${i}" class="quota" maxlength="4" /></td>
+                    <td><input type="number" inputmode="decimal" id="quota${j}_${i}" class="quota" /></td>
                 </tr>
             `;
         }
@@ -123,6 +123,10 @@
             const trisElenco = garaEsistente.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("\n");
             alert(`Questa gara esiste già e ha queste tris vincenti:\n${trisElenco}`);
 
+            // Analisi AI prima di chiedere nuova tris
+            analizzaSimilitudineQuote(garaEsistente);
+            analizzaPatternCavalli(garaEsistente);
+
             if (confirm("Vuoi aggiungere una nuova tris vincente diversa?")) {
                 inserisciNuovaTris(garaEsistente);
             }
@@ -136,9 +140,18 @@
                 messaggio += `Tris: ${g.tris.map(t => t.combinazione + " (Quota: " + t.quota + ")").join(" | ")}\n`;
             });
             alert(messaggio);
+
+            // Analisi AI sulla nuova gara
+            analizzaSimilitudineQuote({ nomi, quote, tris: [] });
+            analizzaPatternCavalli({ nomi, quote, tris: [] });
+
             inserisciNuovaTris(null, nomi, quote);
             return;
         }
+
+        // Nuova gara: analisi AI prima di chiedere tris
+        analizzaSimilitudineQuote({ nomi, quote, tris: [] });
+        analizzaPatternCavalli({ nomi, quote, tris: [] });
 
         inserisciNuovaTris(null, nomi, quote);
     }
@@ -186,15 +199,6 @@
 
         localStorage.setItem("gare", JSON.stringify(gare));
         alert("Gara salvata correttamente.");
-
-        // ---- Qui chiamiamo la nuova AI che analizza la gara salvata ----
-        const nuovaGara = {
-            nomi: nomi || gara.nomi,
-            quote: quote || gara.quote,
-            tris: [{ combinazione: trisStr, quota: quotaTris }]
-        };
-        analizzaSimilitudineQuote(nuovaGara);
-        analizzaPatternCavalli(nuovaGara);
     }
 
     function pulisciTabella(index) {
@@ -434,32 +438,36 @@
                 if (stat && stat.total >= 3) {
                     const perc = (stat.vincente / stat.total) * 100;
                     if (perc >= 60) {
-                        messaggi.push(`⚡ Coppia "${nuovaGara.nomi[i]}"(corsia ${i+1}) e "${nuovaGara.nomi[j]}"(corsia ${j+1}) vincente nel ${perc.toFixed(0)}% dei casi (${stat.vincente} su ${stat.total})`);
+                        messaggi.push(`✨ Coppia "${nuovaGara.nomi[i]}" (corsia ${i+1}) e "${nuovaGara.nomi[j]}" (corsia ${j+1}) ha vinto in ${stat.vincente} su ${stat.total} gare (${perc.toFixed(0)}%)`);
                     }
                 }
             }
         }
 
         if (messaggi.length > 0) {
-            alert("🧠 Pattern AI rilevati:\n" + messaggi.join("\n"));
+            alert("🧠 Analisi AI - Pattern vincenti trovati:\n" + messaggi.join("\n"));
         }
     }
 
-    // Funzione per aggiungere tris previsione all'ultima gara salvata
     function aggiungiTrisPrevisione(nuovaGara, combinazione, quota) {
         const gare = JSON.parse(localStorage.getItem("gare") || "[]");
         const idx = gare.findIndex(g => JSON.stringify(g.nomi) === JSON.stringify(nuovaGara.nomi) && JSON.stringify(g.quote) === JSON.stringify(nuovaGara.quote));
-        if (idx === -1) return;
-
-        if (!gare[idx].tris.some(t => t.combinazione === combinazione)) {
-            gare[idx].tris.push({ combinazione: combinazione, quota: quota });
-            localStorage.setItem("gare", JSON.stringify(gare));
-            alert(`✅ Previsione tris "${combinazione}" aggiunta alla gara salvata.`);
+        if (idx === -1) {
+            // Gara non ancora salvata, la salvo con questa tris
+            const nuova = {
+                nomi: nuovaGara.nomi,
+                quote: nuovaGara.quote,
+                tris: [{ combinazione, quota }]
+            };
+            gare.push(nuova);
         } else {
-            alert("La previsione tris è già presente nella gara.");
+            // Gara esistente, aggiungo solo se tris non presente
+            if (!gare[idx].tris.some(t => t.combinazione === combinazione)) {
+                gare[idx].tris.push({ combinazione, quota });
+            }
         }
+        localStorage.setItem("gare", JSON.stringify(gare));
     }
-    // --- Fine AI aggiuntiva ---
 </script>
 </body>
 </html>
