@@ -168,18 +168,49 @@
         return { nomi, quote };
     }
 
+    // Funzione per confrontare se due array stringhe sono uguali
+    function arrayEquals(a, b) {
+        if (a.length !== b.length) return false;
+        for(let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) return false;
+        }
+        return true;
+    }
+
+    // Controlla se esistono quote duplicate con nomi diversi nella stessa gara (da aggiungere a salvaGara)
+    function checkQuoteDuplicateDifferentNames(nomi, quote) {
+        const mappaQuota = {};
+        for(let i=0; i<quote.length; i++) {
+            const q = quote[i];
+            const n = nomi[i];
+            if(q === "") continue;
+            if(mappaQuota[q] && mappaQuota[q] !== n) {
+                return true; // Quota duplicata con nome diverso
+            }
+            mappaQuota[q] = n;
+        }
+        return false;
+    }
+
     function salvaGara(index) {
         const { nomi, quote } = getGaraData(index);
 
+        // Controllo campi vuoti
         if (nomi.includes("") || quote.includes("")) {
             alert("Completa tutti i campi prima di salvare.");
             return;
         }
 
+        // Controllo quote duplicate con nomi diversi
+        if (checkQuoteDuplicateDifferentNames(nomi, quote)) {
+            alert("Errore: ci sono quote duplicate con nomi diversi nella stessa gara.");
+            return;
+        }
+
         let gare = JSON.parse(localStorage.getItem("gare") || "[]");
 
-        // Trova gara uguale per nomi+quote
-        const garaEsistente = gare.find(g => JSON.stringify(g.nomi) === JSON.stringify(nomi) && JSON.stringify(g.quote) === JSON.stringify(quote));
+        // Verifica gara esistente (nomi e quote identici)
+        const garaEsistente = gare.find(g => arrayEquals(g.nomi, nomi) && arrayEquals(g.quote, quote));
 
         if (garaEsistente) {
             const trisElenco = garaEsistente.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("\n");
@@ -193,7 +224,7 @@
 
         // Gara NON esistente: mostra analisi AI
         const win = window.open("", "Analisi Cavalli Inseriti", "width=400,height=350,scrollbars=yes");
-        const analisiHtml = generaReportAnalisiCavalli(nomi);
+        const analisiHtml = generaReportAnalisiCavalli(nomi, quote);
         win.document.body.style.fontFamily = "Arial, sans-serif";
         win.document.body.style.padding = "10px";
         win.document.body.innerHTML = analisiHtml;
@@ -207,6 +238,7 @@
         }, 300);
     }
 
+    // Inserisci nuova tris vincente (sia per nuova gara sia per gara esistente)
     function inserisciNuovaTris(gara, nomi = null, quote = null) {
         let trisInput = prompt("Inserire tris vincente (3 numeri separati da virgola, es: 1,3,5)");
         if (!trisInput) return;
@@ -237,7 +269,7 @@
             if (!gara.tris.some(t => t.combinazione === nuovaTris.combinazione)) {
                 gara.tris.push(nuovaTris);
                 let gareSalvate = JSON.parse(localStorage.getItem("gare") || "[]");
-                const idx = gareSalvate.findIndex(g => JSON.stringify(g.nomi) === JSON.stringify(gara.nomi) && JSON.stringify(g.quote) === JSON.stringify(gara.quote));
+                const idx = gareSalvate.findIndex(g => arrayEquals(g.nomi, gara.nomi) && arrayEquals(g.quote, gara.quote));
                 if (idx !== -1) {
                     gareSalvate[idx] = gara;
                     localStorage.setItem("gare", JSON.stringify(gareSalvate));
@@ -287,59 +319,79 @@
         win.document.body.innerHTML = output;
     }
 
+    // Funzione di ricerca migliorata (con frecce avanti/indietro)
+    let risultatiRicerca = [];
+    let indexRisultati = 0;
+
     function cercaGare() {
         const cavallo = document.getElementById("nome1_1").value.trim();
-        if (!cavallo) {
-            alert("Inserisci un nome nella prima corsia per cercare.");
+        const quotaCercata = document.getElementById("quota1_1").value.trim();
+        if (!cavallo || !quotaCercata) {
+            alert("Inserisci un nome e quota della corsia 1 per cercare.");
             return;
         }
 
         const gare = JSON.parse(localStorage.getItem("gare") || "[]");
-        const risultati = gare.filter(g => g.nomi[0].toLowerCase() === cavallo.toLowerCase());
+        risultatiRicerca = gare.filter(g => {
+            return g.nomi[0].toLowerCase() === cavallo.toLowerCase() &&
+                   g.quote[0] === quotaCercata;
+        });
 
-        if (risultati.length === 0) {
-            alert("Nessuna gara trovata con quel cavallo in corsia 1.");
+        if (risultatiRicerca.length === 0) {
+            alert("Nessuna gara trovata con quel cavallo e quota in corsia 1.");
             return;
         }
-
-        let index = 0;
-        const win = window.open("", "Risultati Ricerca", "width=600,height=400");
-        const containerId = `contenitore-${Date.now()}`;
-
-        function mostraGara(i) {
-            const gara = risultati[i];
-            win.document.body.innerHTML = `<div id="${containerId}">
-                <h3>Gara ${i + 1} di ${risultati.length}</h3>
-                <ul>${gara.nomi.map((n, idx) => `<li>Corsia ${idx + 1}: ${n} (Quota: ${gara.quote[idx]})</li>`).join("")}</ul>
-                <p><strong>Tris vincenti:</strong> ${gara.tris.map(t => `${t.combinazione} (Quota: ${t.quota})`).join(", ")}</p>
-                <button onclick="window.opener.prevGara()">&larr;</button>
-                <button onclick="window.opener.nextGara()">&rarr;</button>
-            </div>`;
-        }
-
-        window.prevGara = () => {
-            if (index > 0) index--;
-            mostraGara(index);
-        };
-
-        window.nextGara = () => {
-            if (index < risultati.length - 1) index++;
-            mostraGara(index);
-        };
-
-        mostraGara(index);
+        indexRisultati = 0;
+        mostraGaraRisultato();
     }
 
-    // Funzione di analisi che conta le posizioni da tris vincenti (corsie)
-    function generaReportAnalisiCavalli(nomiDaAnalizzare) {
+    function mostraGaraRisultato() {
+        const gara = risultatiRicerca[indexRisultati];
+        const win = window.open("", "Risultati Ricerca", "width=600,height=400");
+        let trisHtml = gara.tris.length > 0 ? gara.tris.map(t => `${t.combinazione} (Quota: ${t.quota})`).join(", ") : "Nessuna tris salvata";
+        win.document.body.style.fontFamily = "Arial, sans-serif";
+        win.document.body.style.padding = "10px";
+        win.document.body.innerHTML = `<h3>Gara ${indexRisultati + 1} di ${risultatiRicerca.length}</h3>
+            <ul>${gara.nomi.map((n,i) => `<li>Corsia ${i+1}: ${n} (Quota: ${gara.quote[i]})</li>`).join("")}</ul>
+            <p><strong>Tris vincenti:</strong> ${trisHtml}</p>
+            <button onclick="window.opener.prevGara()">←</button>
+            <button onclick="window.opener.nextGara()">→</button>`;
+
+        // Fisso le funzioni in window per navigare
+        window.prevGara = () => {
+            if (indexRisultati > 0) {
+                indexRisultati--;
+                mostraGaraRisultato();
+            }
+        };
+        window.nextGara = () => {
+            if (indexRisultati < risultatiRicerca.length - 1) {
+                indexRisultati++;
+                mostraGaraRisultato();
+            }
+        };
+    }
+
+    // Funzione di analisi che considera quote simili +/- 0.1 per migliorare AI
+    function generaReportAnalisiCavalli(nomiDaAnalizzare, quoteDaAnalizzare) {
         const gare = JSON.parse(localStorage.getItem("gare") || "[]");
         if (gare.length === 0) return "<p>Nessuna gara salvata da analizzare.</p>";
 
-        const gareFiltrate = gare.filter(g =>
-            g.nomi.some(nome => nomiDaAnalizzare.includes(nome))
-        );
-        if (gareFiltrate.length === 0) return "<p>Nessuna gara trovata con i cavalli inseriti.</p>";
+        // Funzione helper per confronto quote numeriche con tolleranza +/- 0.1
+        function quotaSimile(q1, q2) {
+            const n1 = parseFloat(q1);
+            const n2 = parseFloat(q2);
+            if (isNaN(n1) || isNaN(n2)) return false;
+            return Math.abs(n1 - n2) <= 0.1;
+        }
 
+        // Filtra gare con almeno una quota simile a quelle della gara nuova
+        const gareFiltrate = gare.filter(g => {
+            return g.quote.some(q => quoteDaAnalizzare.some(qa => quotaSimile(q, qa)));
+        });
+        if (gareFiltrate.length === 0) return "<p>Nessuna gara trovata con quote simili.</p>";
+
+        // Inizializzo stats cavalli per i nomi inseriti
         const statsCavalli = {};
         nomiDaAnalizzare.forEach(nome => {
             statsCavalli[nome] = {
@@ -350,7 +402,8 @@
             };
         });
 
-        gareFiltrate.forEach((gara, idx) => {
+        // Conta apparizioni e posizioni cavalli nelle tris delle gare filtrate
+        gareFiltrate.forEach(gara => {
             const corsiaNomeMap = {};
             gara.nomi.forEach((nome, i) => {
                 corsiaNomeMap[i + 1] = nome;
@@ -378,8 +431,8 @@
             });
         });
 
-        // Tabella senza colonna "Gare con presenza"
-        let html = `<h3>Analisi cavalli inseriti</h3><table style="width:100%;border-collapse:collapse;">
+        // Tabella analisi cavalli
+        let html = `<h3>Analisi cavalli in gare con quote simili</h3><table style="width:100%;border-collapse:collapse;">
             <tr style="background:#ddd;">
                 <th>Cavallo</th>
                 <th>Apparizioni</th>
@@ -400,7 +453,7 @@
         }
         html += "</table>";
 
-        // Aggiungo previsione tris in fondo
+        // Previsione combinazioni tris ordinate
         html += "<h3>Previsione combinazioni tris con i cavalli inseriti</h3>";
         html += generaPrevisioneTris(nomiDaAnalizzare);
 
