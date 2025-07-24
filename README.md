@@ -94,6 +94,7 @@
 <script>
 const NUM_CORSIE = 6;
 
+// Inizializza tabella
 function inizializzaTabella() {
   const tbody = document.getElementById("body1");
   for (let i = 1; i <= NUM_CORSIE; i++) {
@@ -107,11 +108,13 @@ function inizializzaTabella() {
   }
 }
 
+// Backup automatico
 setInterval(() => {
   const gare = localStorage.getItem("gare");
   if (gare) localStorage.setItem("backup_gare", gare);
 }, 60000);
 
+// Backup manuale
 function exportBackup() {
   const data = localStorage.getItem("gare") || "[]";
   const blob = new Blob([data], { type: "application/json" });
@@ -121,6 +124,7 @@ function exportBackup() {
   link.click();
 }
 
+// Importa backup
 function importaBackup(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -140,45 +144,6 @@ function importaBackup(event) {
   };
   reader.readAsText(file);
 }
-
-function salvaGara(index) {
-  const { nomi, quote } = getGaraData(index);
-  if (nomi.includes("") || quote.includes("")) {
-    alert("Compila tutti i campi prima di salvare.");
-    return;
-  }
-
-  let gare = JSON.parse(localStorage.getItem("gare") || "[]");
-
-  // Controllo gara identica
-  const garaEsatta = gare.find(g => JSON.stringify(g.nomi) === JSON.stringify(nomi) && JSON.stringify(g.quote) === JSON.stringify(quote));
-  if (garaEsatta) {
-    alert("Questa gara esiste già.");
-    return;
-  }
-
-  // Nuovo controllo: stessi nomi ma quote diverse
-  const stessaCombinazioneNomi = gare.find(g => JSON.stringify(g.nomi) === JSON.stringify(nomi));
-  if (stessaCombinazioneNomi) {
-    const conferma = confirm("Esiste già una gara con gli stessi cavalli, ma quote diverse.\nVuoi salvarla comunque?");
-    if (!conferma) return;
-  }
-
-  const reportAI = analisiAIAvanzata(nomi, quote, gare);
-  mostraReport(reportAI.reportTesto);
-
-  if (reportAI.alertMessage && !confirm(reportAI.alertMessage + "\n\nVuoi comunque salvare la gara?")) return;
-
-  let tris = prompt("Inserisci tris vincente (es. 1,4,5):");
-  if (!tris || tris.split(",").length !== 3) return alert("Formato tris non valido.");
-  let quotaTris = prompt("Quota tris (es. 18.5):");
-  if (!quotaTris || isNaN(parseFloat(quotaTris))) return alert("Quota non valida.");
-
-  gare.push({ nomi, quote, tris: [{ combinazione: tris, quota: quotaTris }] });
-  localStorage.setItem("gare", JSON.stringify(gare));
-  alert("Gara salvata.");
-}
-
 function getGaraData(index) {
   const nomi = [], quote = [];
   for (let i = 1; i <= NUM_CORSIE; i++) {
@@ -192,91 +157,257 @@ function mostraReport(testo) {
   document.getElementById("report").textContent = testo;
 }
 
+function salvaGara(index) {
+  const { nomi, quote } = getGaraData(index);
+  if (nomi.includes("") || quote.includes("")) {
+    alert("Compila tutti i campi prima di salvare.");
+    return;
+  }
+
+  let gare = JSON.parse(localStorage.getItem("gare") || "[]");
+
+  const quoteStr = JSON.stringify(quote.map(q => parseFloat(q).toFixed(2)));
+  const nomiStr = JSON.stringify(nomi);
+
+  // Quote uguali, cavalli diversi
+  const gareStessaQuota = gare.filter(g => JSON.stringify(g.quote.map(q => parseFloat(q).toFixed(2))) === quoteStr && JSON.stringify(g.nomi) !== nomiStr);
+  if (gareStessaQuota.length > 0) {
+    let msg = `⚠️ Questa combinazione di quote è già presente in ${gareStessaQuota.length} gara/e con cavalli diversi.\n`;
+    gareStessaQuota.forEach((g, i) => {
+      msg += `\nGara ${i + 1} → Tris vincenti:\n${g.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("\n")}`;
+    });
+    alert(msg);
+  }
+
+  // Nomi uguali, quote diverse
+  const gareStessiNomi = gare.filter(g => JSON.stringify(g.nomi) === nomiStr && JSON.stringify(g.quote.map(q => parseFloat(q).toFixed(2))) !== quoteStr);
+  if (gareStessiNomi.length > 0) {
+    let msg = `⚠️ Esiste già una gara con gli stessi cavalli ma quote differenti:\n`;
+    gareStessiNomi.forEach((g, i) => {
+      msg += `\nGara ${i + 1} → Quote: ${g.quote.join(", ")}\nTris:\n${g.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("\n")}`;
+    });
+    if (!confirm(msg + `\n\nVuoi salvare comunque?`)) return;
+  }
+
+  // Esegui analisi AI PRIMA di chiedere la tris
+  const reportAI = analisiAIAvanzata(nomi, quote, gare);
+  mostraReport(reportAI.reportTesto);
+
+  // Chiedi se vuoi procedere
+  if (!confirm("Vuoi procedere con il salvataggio della gara dopo l’analisi AI?")) return;
+
+  // Gara identica già salvata
+  const garaEsatta = gare.find(g => JSON.stringify(g.nomi) === nomiStr && JSON.stringify(g.quote.map(q => parseFloat(q).toFixed(2))) === quoteStr);
+  if (garaEsatta) {
+    let msg = `⚠️ Questa gara esiste già.\nTris salvate:\n`;
+    msg += garaEsatta.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("\n");
+    if (confirm(msg + `\n\nVuoi salvare comunque un'altra tris?`)) {
+      let tris = prompt("Inserisci nuova tris vincente (es. 1,4,5):");
+      if (!tris || tris.split(",").length !== 3) return alert("Formato tris non valido.");
+      let quotaTris = prompt("Quota tris (es. 18.5):");
+      if (!quotaTris || isNaN(parseFloat(quotaTris))) return alert("Quota non valida.");
+      if (garaEsatta.tris.some(t => t.combinazione === tris && parseFloat(t.quota) === parseFloat(quotaTris))) {
+        alert("✅ Abbiamo vinto allora!");
+        return;
+      }
+      garaEsatta.tris.push({ combinazione: tris, quota: quotaTris });
+      localStorage.setItem("gare", JSON.stringify(gare));
+      alert("Nuova tris aggiunta.");
+    }
+    return;
+  }
+
+  // Gara nuova → chiedi tris e quota
+  let tris = prompt("Inserisci tris vincente (es. 1,4,5):");
+  if (!tris || tris.split(",").length !== 3) return alert("Formato tris non valido.");
+  let quotaTris = prompt("Quota tris (es. 18.5):");
+  if (!quotaTris || isNaN(parseFloat(quotaTris))) return alert("Quota non valida.");
+
+  gare.push({ nomi, quote, tris: [{ combinazione: tris, quota: quotaTris }] });
+  localStorage.setItem("gare", JSON.stringify(gare));
+  alert("Gara salvata.");
+}
+
 function analisiAIAvanzata(nomi, quote, gare) {
   const nuoveQuote = quote.map(q => parseFloat(q));
   const sommaQuote = nuoveQuote.reduce((a, b) => a + b, 0);
-  const sogliaQuota = 0.2;
-  const minGare = 3;
-  const patternLabels = quote.map(q => {
-    const val = parseFloat(q);
-    if (val < 2) return "B";
-    if (val <= 3.5) return "M";
+  const minGareAnalisi = 10;
+  const patternLabels = nuoveQuote.map(q => {
+    if (q < 2) return "B";
+    if (q <= 3.5) return "M";
     return "A";
   });
 
   let report = `🧠 ANALISI INTELLIGENTE\n----------------------\n`;
   report += `📊 Pattern quote: ${patternLabels.join("-")}\n`;
-  report += `🧮 Somma quote: ${sommaQuote.toFixed(2)}\n`;
+  report += `🧮 Somma quote: ${sommaQuote.toFixed(2)}\n\n`;
 
   let cavalliTotali = {}, cavalliCorsia = {};
+  let quoteStatistiche = {};
+  let trisSuggerita = [];
+  let quoteSimili = [];
+  let patternSimili = [];
 
-  for (let i = 0; i < NUM_CORSIE; i++) {
-    const nome = nomi[i];
-    const quota = nuoveQuote[i];
-    if (!nome || isNaN(quota)) continue;
+  // Quote storiche simili e pattern simili
+  gare.forEach(g => {
+    const q = g.quote.map(x => parseFloat(x));
+    const patternGara = q.map(qv => qv < 2 ? "B" : qv <= 3.5 ? "M" : "A");
+    const matchCount = patternGara.filter((v, i) => v === patternLabels[i]).length;
+    if (matchCount >= 5) patternSimili.push(g);
 
+    const simili = q.filter((val, i) => Math.abs(val - nuoveQuote[i]) <= 0.2).length;
+    if (simili >= 5) quoteSimili.push(g);
+
+    q.forEach((val, idx) => {
+      const intervallo = (Math.round(val * 2) / 2).toFixed(1);
+      quoteStatistiche[intervallo] = quoteStatistiche[intervallo] || { podi: 0, tot: 0 };
+      if (g.tris.some(t => t.combinazione.split(",").includes(String(idx + 1)))) {
+        quoteStatistiche[intervallo].podi++;
+      }
+      quoteStatistiche[intervallo].tot++;
+    });
+  });
+
+  // Cavallo favorito e sfavorito
+  let minQuota = Math.min(...nuoveQuote);
+  let maxQuota = Math.max(...nuoveQuote);
+  let favoritoIdx = nuoveQuote.indexOf(minQuota);
+  let sfavoritoIdx = nuoveQuote.indexOf(maxQuota);
+
+  report += `🏇 Cavallo favorito: ${nomi[favoritoIdx]} (Corsia ${favoritoIdx + 1}, Quota ${minQuota})\n`;
+  report += `🐢 Cavallo sfavorito: ${nomi[sfavoritoIdx]} (Corsia ${sfavoritoIdx + 1}, Quota ${maxQuota})\n`;
+
+  // Storico per cavallo favorito
+  let storicoFavorito = gare.filter(g => {
+    const q = g.quote.map(x => parseFloat(x));
+    const min = Math.min(...q);
+    return g.nomi[q.indexOf(min)] === nomi[favoritoIdx];
+  });
+
+  const favoritoPodio = storicoFavorito.filter(g =>
+    g.tris.some(t => t.combinazione.split(",").includes(String(favoritoIdx + 1)))
+  );
+
+  if (storicoFavorito.length > 0) {
+    report += `📊 Il favorito in gare storiche è andato a podio ${favoritoPodio.length} su ${storicoFavorito.length} volte (${((favoritoPodio.length / storicoFavorito.length) * 100).toFixed(1)}%)\n`;
+  } else {
+    report += `📊 Nessuna gara storica trovata per ${nomi[favoritoIdx]} con quota simile.\n`;
+  }
+
+  // Cavallo sfavorito: analisi su podio o vincente
+  let storicoSfavorito = gare.filter(g => g.nomi.includes(nomi[sfavoritoIdx]));
+  let podioSfavorito = 0;
+  let vittorieSfavorito = 0;
+
+  storicoSfavorito.forEach(g => {
+    g.tris.forEach(t => {
+      const corsie = t.combinazione.split(",");
+      const idx = g.nomi.findIndex(n => n === nomi[sfavoritoIdx]);
+      if (idx !== -1 && corsie.includes(String(idx + 1))) {
+        podioSfavorito++;
+        if (corsie[0] === String(idx + 1)) vittorieSfavorito++;
+      }
+    });
+  });
+
+  if (storicoSfavorito.length > 0) {
+    report += `📊 Il cavallo sfavorito è andato a podio ${podioSfavorito} su ${storicoSfavorito.length} gare (${((podioSfavorito / storicoSfavorito.length) * 100).toFixed(1)}%)\n`;
+    if (vittorieSfavorito > 0) {
+      report += `🎉 Ha vinto ${vittorieSfavorito} volte! Possibile sorpresa.\n`;
+    }
+  }
+
+  // Analisi per cavallo globale
+  report += `\n📌 Analisi per cavallo globale:\n`;
+  nomi.forEach((nome, i) => {
     let tot = 0, podio = 0;
-
     gare.forEach(g => {
-      for (let j = 0; j < NUM_CORSIE; j++) {
-        if (g.nomi[j] === nome && Math.abs(parseFloat(g.quote[j]) - quota) <= sogliaQuota) {
+      for (let j = 0; j < g.nomi.length; j++) {
+        if (g.nomi[j] === nome && Math.abs(parseFloat(g.quote[j]) - nuoveQuote[i]) <= 0.2) {
           tot++;
-          if (g.tris.some(t => t.combinazione.split(",").includes(String(j + 1)))) {
-            podio++;
-          }
+          if (g.tris.some(t => t.combinazione.split(",").includes(String(j + 1)))) podio++;
         }
       }
     });
-
-    if (tot >= minGare) {
-      const perc = ((podio / tot) * 100).toFixed(1);
-      report += `✔️ "${nome}" con quota ~${quota.toFixed(2)} → ${perc}% podio (${podio}/${tot})\n`;
-    }
-
-    cavalliTotali[nome] = cavalliTotali[nome] || { gare: 0, podi: 0 };
-    cavalliTotali[nome].gare += tot;
-    cavalliTotali[nome].podi += podio;
-
-    cavalliCorsia[nome] = cavalliCorsia[nome] || {};
-    cavalliCorsia[nome][i + 1] = cavalliCorsia[nome][i + 1] || { gare: 0, podi: 0 };
-    cavalliCorsia[nome][i + 1].gare += tot;
-    cavalliCorsia[nome][i + 1].podi += podio;
-  }
-
-  report += `\n📌 Analisi per cavallo globale:\n`;
-  Object.keys(cavalliTotali).forEach(nome => {
-    const { gare, podi } = cavalliTotali[nome];
-    if (gare >= minGare) {
-      report += `→ ${nome}: ${((podi / gare) * 100).toFixed(1)}% podio su ${gare} gare\n`;
+    if (tot >= minGareAnalisi) {
+      report += `→ ${nome}: ${(podio / tot * 100).toFixed(1)}% podio su ${tot} gare\n`;
+      trisSuggerita.push({ nome, corsia: i + 1, perc: podio / tot, tot });
     }
   });
 
+  // Analisi cavallo + corsia
   report += `\n📌 Analisi cavallo + corsia:\n`;
-  Object.keys(cavalliCorsia).forEach(nome => {
-    const dati = cavalliCorsia[nome];
-    Object.keys(dati).forEach(corsia => {
-      const { gare, podi } = dati[corsia];
-      if (gare >= minGare) {
-        report += `→ ${nome} in corsia ${corsia}: ${((podi / gare) * 100).toFixed(1)}% podio\n`;
+  nomi.forEach((nome, i) => {
+    let tot = 0, podio = 0;
+    gare.forEach(g => {
+      if (g.nomi[i] === nome && Math.abs(parseFloat(g.quote[i]) - nuoveQuote[i]) <= 0.2) {
+        tot++;
+        if (g.tris.some(t => t.combinazione.split(",").includes(String(i + 1)))) podio++;
       }
     });
+    if (tot >= minGareAnalisi) {
+      report += `→ ${nome} in corsia ${i + 1}: ${(podio / tot * 100).toFixed(1)}% podio\n`;
+    }
   });
 
-  report += `\n📌 Quote alte e somma quote:\n`;
+  // Tris consigliata
+  report += `\n🎯 Tris consigliata:\n`;
+  if (trisSuggerita.length >= 3) {
+    const tris = trisSuggerita.sort((a, b) => b.perc - a.perc).slice(0, 3);
+    tris.forEach(c => {
+      report += `→ ${c.nome} (Corsia ${c.corsia}) - ${(c.perc * 100).toFixed(1)}% podio su ${c.tot} gare\n`;
+    });
+  } else {
+    report += `Nessuna tris consigliata: servono almeno 3 cavalli con ${minGareAnalisi} gare analizzate.\n`;
+  }
+
+  // Quote spesso vincenti
+  report += `\n📌 Quote spesso vincenti:\n`;
+  Object.keys(quoteStatistiche).sort((a, b) => parseFloat(a) - parseFloat(b)).forEach(q => {
+    const { podi, tot } = quoteStatistiche[q];
+    if (tot >= 5) {
+      report += `→ Quota ${q}: ${podi} su ${tot} podio (${(podi / tot * 100).toFixed(1)}%)\n`;
+    }
+  });
+
+  // Quote alte
   if (sommaQuote >= 18) {
-    let cavalliAlti = nuoveQuote.map((q, i) => ({ nome: nomi[i], quota: q, idx: i + 1 }))
-      .filter(c => c.quota >= 3.5);
-    if (cavalliAlti.length > 0) {
-      report += `Attenzione: somma alta. Quote >3.5:\n`;
-      cavalliAlti.forEach(c => {
-        report += `→ ${c.nome} (Corsia ${c.idx}, Quota ${c.quota})\n`;
+    report += `\n📌 Quote alte e somma quote:\nAttenzione: somma alta. Quote >3.5:\n`;
+    nuoveQuote.forEach((q, i) => {
+      if (q > 3.5) report += `→ ${nomi[i]} (Corsia ${i + 1}, Quota ${q})\n`;
+    });
+  }
+
+  // Gare con quote simili
+  if (quoteSimili.length > 0) {
+    report += `\n📌 Gare storiche con quote simili: ${quoteSimili.length}\n`;
+    quoteSimili.forEach((g, i) => {
+      g.tris.forEach(t => {
+        report += `🧩 Gara ${i + 1} → Tris: ${t.combinazione} (Quota: ${t.quota})\n`;
       });
+    });
+  }
+
+  // Gare con pattern simile e sorprese
+  if (patternSimili.length > 0) {
+    let sorprese = 0;
+    patternSimili.forEach(g => {
+      g.tris.forEach(t => {
+        const primaCorsia = parseInt(t.combinazione.split(",")[0]) - 1;
+        const quotaVincente = parseFloat(g.quote[primaCorsia]);
+        if (quotaVincente > 10) sorprese++;
+      });
+    });
+    report += `\n📈 Gare con pattern quote simile: ${patternSimili.length}`;
+    if (sorprese > 0) {
+      report += ` → In ${sorprese} di queste ha vinto un cavallo con quota >10!\n`;
+    } else {
+      report += ` → Nessuna sorpresa rilevata in quelle gare.\n`;
     }
   }
 
   return { reportTesto: report };
 }
-
 function setupAutocomplete() {
   const inputs = document.querySelectorAll("input.nome");
   const cavalli = new Set();
