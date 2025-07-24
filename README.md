@@ -1,529 +1,376 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8" />
-    <title>Archivio Gare Cavalli</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-        }
-        .gara-container {
-            display: flex;
-            flex-direction: column;
-            gap: 50px;
-            margin-bottom: 30px;
-        }
-        .gara {
-            width: 100%;
-            position: relative;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 10px;
-        }
-        th, td {
-            border: 1px solid #ccc;
-            padding: 4px;
-            text-align: center;
-            position: relative;
-        }
-        input[type="text"], input[type="number"] {
-            width: 90%;
-            padding: 4px;
-        }
-        input.quota {
-            width: 60px;
-        }
-        button {
-            margin-top: 5px;
-            margin-right: 10px;
-        }
-        .autocomplete-items {
-            position: absolute;
-            border: 1px solid #ccc;
-            background-color: #fff;
-            z-index: 99;
-            max-height: 150px;
-            overflow-y: auto;
-            top: 100%;
-            left: 0;
-            right: 0;
-        }
-        .autocomplete-items div {
-            padding: 5px;
-            cursor: pointer;
-        }
-        .autocomplete-items div:hover {
-            background-color: #f0f0f0;
-        }
-        #report {
-            margin-top: 20px;
-            background: #f9f9f9;
-            border: 1px solid #ccc;
-            padding: 10px;
-            white-space: pre-wrap;
-            font-family: monospace;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>Archivio Gare Cavalli</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .gara-container {
+      margin-bottom: 30px;
+    }
+    .gara {
+      width: 100%;
+      position: relative;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 4px;
+      text-align: center;
+      position: relative;
+    }
+    input[type="text"], input[type="number"] {
+      width: 90%;
+      padding: 4px;
+    }
+    input.quota {
+      width: 60px;
+    }
+    button {
+      margin-top: 5px;
+      margin-right: 10px;
+    }
+    .autocomplete-items {
+      position: absolute;
+      border: 1px solid #ccc;
+      background-color: #fff;
+      z-index: 99;
+      max-height: 150px;
+      overflow-y: auto;
+      top: 100%;
+      left: 0;
+      right: 0;
+    }
+    .autocomplete-items div {
+      padding: 5px;
+      cursor: pointer;
+    }
+    .autocomplete-items div:hover {
+      background-color: #f0f0f0;
+    }
+    #report {
+      margin-top: 20px;
+      background: #f9f9f9;
+      border: 1px solid #ccc;
+      padding: 10px;
+      white-space: pre-wrap;
+      font-family: monospace;
+    }
+    #importFile {
+      display: none;
+    }
+  </style>
 </head>
 <body>
 <h2>Archivio Gare Cavalli</h2>
+
 <div class="gara-container">
-    <div class="gara">
-        <table id="gara1">
-            <tr><th>Corsia</th><th>Nome</th><th>Quota</th></tr>
-            <tbody id="body1"></tbody>
-        </table>
-        <button onclick="salvaGara(1)">Salva</button>
-        <button onclick="pulisciTabella(1)">Pulisci Tabella</button>
-        <button onclick="cercaGare()">Cerca</button>
-    </div>
-    <div class="gara">
-        <table id="gara2">
-            <tr><th>Corsia</th><th>Nome</th><th>Quota</th></tr>
-            <tbody id="body2"></tbody>
-        </table>
-        <button onclick="salvaGara(2)">Salva</button>
-        <button onclick="pulisciTabella(2)">Pulisci Tabella</button>
-    </div>
+  <div class="gara">
+    <table id="gara1">
+      <thead><tr><th>Corsia</th><th>Nome</th><th>Quota</th></tr></thead>
+      <tbody id="body1"></tbody>
+    </table>
+    <button onclick="salvaGara(1)">Salva</button>
+    <button onclick="pulisciTabella(1)">Pulisci Tabella</button>
+    <button onclick="cercaGare()">Cerca</button>
+  </div>
 </div>
 
 <button onclick="cancellaTutto()">Cancella Tutto (Storage)</button>
 <button onclick="mostraTutteGare()">Mostra tutte le gare salvate</button>
+<button onclick="exportBackup()">Backup dati (JSON)</button>
+<button onclick="exportCSV()">Esporta in CSV</button>
+<button onclick="document.getElementById('importFile').click()">Importa backup (JSON)</button>
+<input type="file" id="importFile" accept=".json" onchange="importaBackup(event)">
 
 <div id="report"></div>
-
 <script>
-    // Genera righe con input dinamicamente
-    for (let j = 1; j <= 2; j++) {
-        const tbody = document.getElementById(`body${j}`);
-        for (let i = 1; i <= 6; i++) {
-            tbody.innerHTML += `
-                <tr>
-                    <td>${i}</td>
-                    <td><input type="text" id="nome${j}_${i}" class="nome" autocomplete="off" /></td>
-                    <td><input type="number" inputmode="decimal" id="quota${j}_${i}" class="quota" maxlength="4" /></td>
-                </tr>
-            `;
+const NUM_CORSIE = 6;
+
+// Inizializza la tabella
+function inizializzaTabella() {
+  const tbody = document.getElementById("body1");
+  for (let i = 1; i <= NUM_CORSIE; i++) {
+    tbody.innerHTML += `
+      <tr>
+        <td>${i}</td>
+        <td><input type="text" id="nome1_${i}" class="nome" autocomplete="off" /></td>
+        <td><input type="number" step="0.01" id="quota1_${i}" class="quota" /></td>
+      </tr>
+    `;
+  }
+}
+
+// Backup automatico ogni 60 sec
+setInterval(() => {
+  const gare = localStorage.getItem("gare");
+  if (gare) localStorage.setItem("backup_gare", gare);
+}, 60000);
+
+// Backup manuale JSON
+function exportBackup() {
+  const data = localStorage.getItem("gare") || "[]";
+  const blob = new Blob([data], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `gare_backup_${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+}
+
+// Importa backup JSON
+function importaBackup(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const dati = JSON.parse(e.target.result);
+      if (Array.isArray(dati)) {
+        localStorage.setItem("gare", JSON.stringify(dati));
+        alert("Backup importato con successo.");
+      } else {
+        alert("Formato file non valido.");
+      }
+    } catch {
+      alert("Errore nella lettura del file.");
+    }
+  };
+  reader.readAsText(file);
+}
+
+// Salva gara
+function salvaGara(index) {
+  const { nomi, quote } = getGaraData(index);
+  if (nomi.includes("") || quote.includes("")) {
+    alert("Compila tutti i campi prima di salvare.");
+    return;
+  }
+
+  let gare = JSON.parse(localStorage.getItem("gare") || "[]");
+  const garaEsistente = gare.find(g => JSON.stringify(g.nomi) === JSON.stringify(nomi) && JSON.stringify(g.quote) === JSON.stringify(quote));
+  if (garaEsistente) {
+    alert("Questa gara esiste già.");
+    return;
+  }
+
+  const reportAI = analisiAIAvanzata(nomi, quote, gare);
+  mostraReport(reportAI.reportTesto);
+
+  if (reportAI.alertMessage && !confirm(reportAI.alertMessage + "\n\nVuoi comunque salvare la gara?")) return;
+
+  let tris = prompt("Inserisci tris vincente (es. 1,4,5):");
+  if (!tris || tris.split(",").length !== 3) return alert("Formato tris non valido.");
+  let quotaTris = prompt("Quota tris (es. 18.5):");
+  if (!quotaTris || isNaN(parseFloat(quotaTris))) return alert("Quota non valida.");
+
+  gare.push({ nomi, quote, tris: [{ combinazione: tris, quota: quotaTris }] });
+  localStorage.setItem("gare", JSON.stringify(gare));
+  alert("Gara salvata.");
+}
+function getGaraData(index) {
+  const nomi = [], quote = [];
+  for (let i = 1; i <= NUM_CORSIE; i++) {
+    nomi.push(document.getElementById(`nome${index}_${i}`).value.trim());
+    quote.push(document.getElementById(`quota${index}_${i}`).value.trim());
+  }
+  return { nomi, quote };
+}
+
+function mostraReport(testo) {
+  document.getElementById("report").textContent = testo;
+}
+
+function analisiAIAvanzata(nomi, quote, gare) {
+  const nuoveQuote = quote.map(q => parseFloat(q));
+  const sommaQuote = nuoveQuote.reduce((a, b) => a + b, 0);
+  const sogliaQuota = 0.2;
+  const sogliaFreq = 0.5;
+  const minGare = 3;
+  const patternLabels = quote.map(q => {
+    const val = parseFloat(q);
+    if (val < 2) return "B";
+    if (val <= 3.5) return "M";
+    return "A";
+  });
+
+  let report = `🧠 ANALISI INTELLIGENTE\n----------------------\n`;
+  report += `📊 Pattern quote: ${patternLabels.join("-")}\n`;
+  report += `🧮 Somma quote: ${sommaQuote.toFixed(2)}\n`;
+
+  let cavalliTotali = {}, cavalliCorsia = {};
+
+  for (let i = 0; i < NUM_CORSIE; i++) {
+    const nome = nomi[i];
+    const quota = nuoveQuote[i];
+    if (!nome || isNaN(quota)) continue;
+
+    let tot = 0, podio = 0;
+
+    gare.forEach(g => {
+      for (let j = 0; j < NUM_CORSIE; j++) {
+        if (g.nomi[j] === nome && Math.abs(parseFloat(g.quote[j]) - quota) <= sogliaQuota) {
+          tot++;
+          if (g.tris.some(t => t.combinazione.split(",").includes(String(j + 1)))) {
+            podio++;
+          }
         }
+      }
+    });
+
+    if (tot >= minGare) {
+      const perc = ((podio / tot) * 100).toFixed(1);
+      report += `✔️ "${nome}" con quota ~${quota.toFixed(2)} → ${perc}% podio (${podio}/${tot})\n`;
     }
 
-    function getGaraData(index) {
-        const nomi = [], quote = [];
-        for (let i = 1; i <= 6; i++) {
-            nomi.push(document.getElementById(`nome${index}_${i}`).value.trim());
-            quote.push(document.getElementById(`quota${index}_${i}`).value.trim());
-        }
-        return { nomi, quote };
+    // Statistiche per nome cavallo
+    cavalliTotali[nome] = cavalliTotali[nome] || { gare: 0, podi: 0 };
+    cavalliTotali[nome].gare += tot;
+    cavalliTotali[nome].podi += podio;
+
+    // Statistiche per nome + corsia
+    cavalliCorsia[nome] = cavalliCorsia[nome] || {};
+    cavalliCorsia[nome][i + 1] = cavalliCorsia[nome][i + 1] || { gare: 0, podi: 0 };
+    cavalliCorsia[nome][i + 1].gare += tot;
+    cavalliCorsia[nome][i + 1].podi += podio;
+  }
+
+  report += `\n📌 Analisi per cavallo globale:\n`;
+  Object.keys(cavalliTotali).forEach(nome => {
+    const { gare, podi } = cavalliTotali[nome];
+    if (gare >= minGare) {
+      report += `→ ${nome}: ${((podi / gare) * 100).toFixed(1)}% podio su ${gare} gare\n`;
     }
+  });
 
-    function salvaGara(index) {
-        const { nomi, quote } = getGaraData(index);
-        if (nomi.includes("") || quote.includes("")) {
-            alert("Completa tutti i campi prima di salvare.");
-            return;
-        }
+  report += `\n📌 Analisi cavallo + corsia:\n`;
+  Object.keys(cavalliCorsia).forEach(nome => {
+    const dati = cavalliCorsia[nome];
+    Object.keys(dati).forEach(corsia => {
+      const { gare, podi } = dati[corsia];
+      if (gare >= minGare) {
+        report += `→ ${nome} in corsia ${corsia}: ${((podi / gare) * 100).toFixed(1)}% podio\n`;
+      }
+    });
+  });
 
-        let gare = JSON.parse(localStorage.getItem("gare") || "[]");
-        // Cerco gara con nomi e quote uguali
-        const garaEsistente = gare.find(g => JSON.stringify(g.nomi) === JSON.stringify(nomi) && JSON.stringify(g.quote) === JSON.stringify(quote));
-        if (garaEsistente) {
-            const trisElenco = garaEsistente.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("\n");
-            alert(`Questa gara esiste già e ha queste tris vincenti:\n${trisElenco}`);
-
-            if (confirm("Vuoi aggiungere una nuova tris vincente diversa?")) {
-                inserisciNuovaTris(garaEsistente);
-            }
-            return;
-        }
-
-        // Cerco gare con quote uguali ma nomi diversi
-        const gareStesseQuote = gare.filter(g => JSON.stringify(g.quote) === JSON.stringify(quote));
-        if (gareStesseQuote.length > 0) {
-            let messaggio = "⚠️ Attenzione: queste quote sono già presenti in altre gare con nomi differenti.\nEcco le tris vincenti associate:\n";
-            gareStesseQuote.forEach(g => {
-                messaggio += `Tris: ${g.tris.map(t => t.combinazione + " (Quota: " + t.quota + ")").join(" | ")}\n`;
-            });
-            alert(messaggio);
-            inserisciNuovaTris(null, nomi, quote);
-            return;
-        }
-
-        // Gara nuova con quote nuove: faccio analisi AI avanzata
-        const reportAI = analisiAIAvanzata(nomi, quote, gare);
-
-        if (reportAI.alertMessage) {
-            if (!confirm(reportAI.alertMessage + "\n\nVuoi comunque salvare la gara?")) {
-                return;
-            }
-        }
-
-        // Se qui, salvo gara (con tris AI suggerita o senza)
-        if (reportAI.suggerimentoTris) {
-            if (confirm(`🧠 Suggerimento AI: La tris più frequente tra gare simili è ${reportAI.suggerimentoTris.combinazione} (Quota media: ${reportAI.suggerimentoTris.quota})\nVuoi salvarla come tris vincente?`)) {
-                const nuovaGara = { nomi, quote, tris: [{ combinazione: reportAI.suggerimentoTris.combinazione, quota: reportAI.suggerimentoTris.quota }] };
-                gare.push(nuovaGara);
-                localStorage.setItem("gare", JSON.stringify(gare));
-                alert("Gara salvata con tris AI.");
-                mostraReport(reportAI.reportTesto);
-                return;
-            }
-        }
-
-        inserisciNuovaTris(null, nomi, quote);
-        mostraReport(reportAI.reportTesto);
+  report += `\n📌 Quote alte e somma quote:\n`;
+  if (sommaQuote >= 18) {
+    let cavalliAlti = nuoveQuote.map((q, i) => ({ nome: nomi[i], quota: q, idx: i + 1 }))
+      .filter(c => c.quota >= 3.5);
+    if (cavalliAlti.length > 0) {
+      report += `Attenzione: somma alta. Quote >3.5:\n`;
+      cavalliAlti.forEach(c => {
+        report += `→ ${c.nome} (Corsia ${c.idx}, Quota ${c.quota})\n`;
+      });
     }
+  }
 
-    function inserisciNuovaTris(gara, nomi = null, quote = null) {
-        const trisInput = prompt("Inserire tris vincente (es. 1,3,5)");
-        if (!trisInput) return;
+  return { reportTesto: report };
+}
+function setupAutocomplete() {
+  const inputs = document.querySelectorAll("input.nome");
+  const cavalli = new Set();
+  const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+  gare.forEach(g => g.nomi.forEach(n => cavalli.add(n)));
+  
+  inputs.forEach(input => {
+    input.addEventListener("input", function() {
+      closeLists();
+      const val = this.value;
+      if (!val) return;
+      const list = document.createElement("div");
+      list.setAttribute("class", "autocomplete-items");
+      this.parentNode.appendChild(list);
 
-        const trisArray = trisInput.split(",").map(s => s.trim()).filter(n => !isNaN(n) && n !== "");
-        if (trisArray.length !== 3) {
-            alert("La tris vincente deve essere formata da 3 numeri.");
-            return;
+      [...cavalli].forEach(nome => {
+        if (nome.toLowerCase().startsWith(val.toLowerCase())) {
+          const div = document.createElement("div");
+          div.innerHTML = `<strong>${nome.substr(0, val.length)}</strong>${nome.substr(val.length)}<input type='hidden' value='${nome}'>`;
+          div.addEventListener("click", () => {
+            input.value = nome;
+            closeLists();
+          });
+          list.appendChild(div);
         }
+      });
+    });
+    input.addEventListener("blur", () => setTimeout(closeLists, 100));
+  });
 
-        const quotaTris = prompt("Inserire quota della tris vincente (es. 18.5)");
-        if (!quotaTris || isNaN(quotaTris)) {
-            alert("Quota non valida.");
-            return;
-        }
+  function closeLists() {
+    document.querySelectorAll(".autocomplete-items").forEach(el => el.remove());
+  }
+}
 
-        const trisStr = trisArray.join(",");
+function cercaGare() {
+  const nome = document.getElementById("nome1_1").value.trim().toLowerCase();
+  const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+  const risultati = gare.filter(g => g.nomi[0].toLowerCase() === nome);
+  if (risultati.length === 0) return alert("Nessuna gara trovata con quel cavallo in corsia 1.");
 
-        const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+  let index = 0;
+  const win = window.open("", "Risultati Ricerca", "width=600,height=400");
+  function mostraGara(i) {
+    const g = risultati[i];
+    win.document.body.innerHTML = `<h3>Gara ${i+1} di ${risultati.length}</h3><ul>
+      ${g.nomi.map((n, idx) => `<li>Corsia ${idx+1}: ${n} (Quota: ${g.quote[idx]})</li>`).join("")}
+      </ul><p><strong>Tris vincenti:</strong><br>${g.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("<br>")}</p>
+      <button onclick="window.opener.prevGara()">&larr;</button>
+      <button onclick="window.opener.nextGara()">&rarr;</button>`;
+  }
+  window.prevGara = () => { if (index > 0) index--; mostraGara(index); };
+  window.nextGara = () => { if (index < risultati.length - 1) index++; mostraGara(index); };
+  mostraGara(index);
+}
 
-        if (!gara) {
-            const nuovaGara = {
-                nomi,
-                quote,
-                tris: [{ combinazione: trisStr, quota: quotaTris }]
-            };
-            gare.push(nuovaGara);
-        } else {
-            const idx = gare.findIndex(g => JSON.stringify(g.nomi) === JSON.stringify(gara.nomi) && JSON.stringify(g.quote) === JSON.stringify(gara.quote));
-            if (idx === -1) {
-                alert("Errore: gara non trovata nello storage.");
-                return;
-            }
-            if (!gare[idx].tris.some(t => t.combinazione === trisStr)) {
-                gare[idx].tris.push({ combinazione: trisStr, quota: quotaTris });
-            } else {
-                alert("Questa tris è già salvata per questa gara.");
-                return;
-            }
-        }
+function mostraTutteGare() {
+  const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+  if (gare.length === 0) return alert("Nessuna gara salvata.");
+  const win = window.open("", "Gare Salvate", "width=600,height=600,scrollbars=yes");
+  win.document.body.innerHTML = `<h2>${gare.length} Gare Salvate</h2>` + gare.map((g, idx) => `
+    <h3>Gara ${idx + 1}</h3>
+    <ul>${g.nomi.map((n, i) => `<li>Corsia ${i+1}: ${n} (Quota: ${g.quote[i]})</li>`).join("")}</ul>
+    <p><strong>Tris:</strong><br>${g.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("<br>")}</p><hr>`).join("");
+}
 
-        localStorage.setItem("gare", JSON.stringify(gare));
-        alert("Gara salvata correttamente.");
-    }
+function cancellaTutto() {
+  if (confirm("Sicuro di voler eliminare tutte le gare?")) {
+    localStorage.removeItem("gare");
+    alert("Gare eliminate.");
+    document.getElementById("report").textContent = "";
+  }
+}
 
-    function pulisciTabella(index) {
-        if (confirm("Sei sicuro di voler pulire la tabella? I dati non salvati andranno persi.")) {
-            for (let i = 1; i <= 6; i++) {
-                document.getElementById(`nome${index}_${i}`).value = "";
-                document.getElementById(`quota${index}_${i}`).value = "";
-            }
-        }
-    }
+function exportCSV() {
+  const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+  if (gare.length === 0) return alert("Nessuna gara da esportare.");
+  let csv = "Gara,Corsia,Nome,Quota,Tris,QuotaTris\n";
+  gare.forEach((g, idx) => {
+    g.nomi.forEach((nome, i) => {
+      const tris = g.tris.map(t => t.combinazione).join(" | ");
+      const qt = g.tris.map(t => t.quota).join(" | ");
+      csv += `${idx + 1},${i + 1},${nome},${g.quote[i]},${tris},${qt}\n`;
+    });
+  });
+  const blob = new Blob([csv], { type: "text/csv" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `gare_export_${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+}
 
-    function cancellaTutto() {
-        if (confirm("Sei sicuro di voler eliminare tutte le gare salvate?")) {
-            localStorage.removeItem("gare");
-            alert("Tutte le gare sono state eliminate.");
-            document.getElementById("report").textContent = "";
-        }
-    }
-
-    function cercaGare() {
-        const cavallo = document.getElementById("nome1_1").value.trim();
-        if (!cavallo) {
-            alert("Inserisci un nome nella prima corsia per cercare.");
-            return;
-        }
-
-        const gare = JSON.parse(localStorage.getItem("gare") || "[]");
-        const risultati = gare.filter(g => g.nomi[0].toLowerCase() === cavallo.toLowerCase());
-
-        if (risultati.length === 0) {
-            alert("Nessuna gara trovata con quel cavallo in corsia 1.");
-            return;
-        }
-
-        let index = 0;
-        const win = window.open("", "Risultati Ricerca", "width=600,height=400");
-        const containerId = `contenitore-${Date.now()}`;
-
-        function mostraGara(i) {
-            const gara = risultati[i];
-            win.document.body.innerHTML = `<div id="${containerId}">
-                <h3>Gara ${i + 1} di ${risultati.length}</h3>
-                <ul>${gara.nomi.map((n, idx) => `<li>Corsia ${idx + 1}: ${n} (Quota: ${gara.quote[idx]})</li>`).join("")}</ul>
-                <p><strong>Tris vincenti:</strong><br> ${gara.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("<br>")}</p>
-                <button onclick="window.opener.prevGara()">&larr;</button>
-                <button onclick="window.opener.nextGara()">&rarr;</button>
-            </div>`;
-        }
-
-        window.prevGara = () => {
-            if (index > 0) index--;
-            mostraGara(index);
-        };
-
-        window.nextGara = () => {
-            if (index < risultati.length - 1) index++;
-            mostraGara(index);
-        };
-
-        mostraGara(index);
-    }
-
-    function mostraTutteGare() {
-        const gare = JSON.parse(localStorage.getItem("gare") || "[]");
-        if (gare.length === 0) {
-            alert("Nessuna gara salvata.");
-            return;
-        }
-
-        let html = `<h2>Tutte le gare salvate (${gare.length})</h2>`;
-        gare.forEach((g, idx) => {
-            html += `<h3>Gara ${idx + 1}</h3><ul>`;
-            g.nomi.forEach((nome, i) => {
-                html += `<li><strong>Corsia ${i + 1}:</strong> ${nome} (Quota: ${g.quote[i]})</li>`;
-            });
-            html += `</ul><p><strong>Tris vincenti:</strong><br>${g.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("<br>")}</p><hr>`;
-        });
-
-        const win = window.open("", "Tutte le gare salvate", "width=600,height=600,scrollbars=yes");
-        win.document.body.style.fontFamily = "Arial, sans-serif";
-        win.document.body.style.padding = "10px";
-        win.document.body.innerHTML = html;
-    }
-
-    // Autocomplete nomi cavalli
-    function setupAutocomplete() {
-        const inputs = document.querySelectorAll("input.nome");
-        const cavalliSalvati = new Set();
-
-        const gare = JSON.parse(localStorage.getItem("gare") || "[]");
-        gare.forEach(g => {
-            g.nomi.forEach(nome => {
-                if (nome.trim()) cavalliSalvati.add(nome.trim());
-            });
-        });
-
-        inputs.forEach(input => {
-            input.addEventListener("input", function () {
-                closeAllLists();
-                const val = this.value;
-                if (!val) return;
-
-                const list = document.createElement("div");
-                list.setAttribute("class", "autocomplete-items");
-                this.parentNode.appendChild(list);
-
-                [...cavalliSalvati].forEach(nome => {
-                    if (nome.toLowerCase().startsWith(val.toLowerCase())) {
-                        const item = document.createElement("div");
-                        item.innerHTML = "<strong>" + nome.substr(0, val.length) + "</strong>" + nome.substr(val.length);
-                        item.innerHTML += `<input type='hidden' value='${nome}'>`;
-                        item.addEventListener("click", () => {
-                            input.value = nome;
-                            closeAllLists();
-                        });
-                        list.appendChild(item);
-                    }
-                });
-            });
-
-            input.addEventListener("blur", () => setTimeout(closeAllLists, 100));
-        });
-
-        function closeAllLists() {
-            const lists = document.querySelectorAll(".autocomplete-items");
-            lists.forEach(l => l.remove());
-        }
-    }
-
-    window.addEventListener("DOMContentLoaded", setupAutocomplete);
-
-    // --- Funzione di analisi AI avanzata ---
-    function analisiAIAvanzata(nomi, quote, gare) {
-        const nuoveQuote = quote.map(q => parseFloat(q));
-        const sogliaQuota = 0.1; // ±0.1 per range quote simili
-        const sogliaFreq = 0.6;   // 60%
-        const minGare = 3;        // Minimo gare per considerare pattern
-
-        let reportLines = [];
-        let alertMessages = [];
-        let suggerimentoTris = null;
-
-        // 1) Cavallo + quota che entra in tris almeno 60% delle volte in corsia specifica
-        for (let i = 0; i < 6; i++) {
-            const nomeCavallo = nomi[i];
-            const quotaCavallo = nuoveQuote[i];
-            if (!nomeCavallo || isNaN(quotaCavallo)) continue;
-
-            let tot = 0;
-            let countInTris = 0;
-
-            gare.forEach(g => {
-                if (g.nomi[i] === nomeCavallo && Math.abs(parseFloat(g.quote[i]) - quotaCavallo) < sogliaQuota) {
-                    tot++;
-                    // La tris è una stringa "1,3,5" o simile, controllo se la corsia (i+1) è nella tris
-                    if (g.tris.some(t => t.combinazione.split(',').includes(String(i + 1)))) {
-                        countInTris++;
-                    }
-                }
-            });
-
-            if (tot >= minGare && (countInTris / tot) >= sogliaFreq) {
-                reportLines.push(`✔️ Il cavallo "${nomeCavallo}" in corsia ${i + 1} con quota ~${quotaCavallo.toFixed(2)} entra in tris vincente nel ${(countInTris / tot * 100).toFixed(1)}% delle ${tot} gare trovate.`);
-                alertMessages.push(`Cavallo "${nomeCavallo}" corsia ${i + 1} con quota ~${quotaCavallo.toFixed(2)} frequente in tris!`);
-            }
-        }
-
-        // 2) Quote simili in una corsia che fanno vincere altra corsia in tris con frequenza >=60%
-        for (let i = 0; i < 6; i++) {
-            const quotaCorrente = nuoveQuote[i];
-            if (isNaN(quotaCorrente)) continue;
-
-            // Per ogni gara e sua tris, vedo se la quota in corsia i è simile e quali corsie sono nella tris
-            let totaleSimili = 0;
-            const vinciteCorsie = {};
-
-            gare.forEach(g => {
-                if (Math.abs(parseFloat(g.quote[i]) - quotaCorrente) < sogliaQuota) {
-                    totaleSimili++;
-                    g.tris.forEach(t => {
-                        const corsie = t.combinazione.split(',').map(x => parseInt(x));
-                        corsie.forEach(c => {
-                            vinciteCorsie[c] = (vinciteCorsie[c] || 0) + 1;
-                        });
-                    });
-                }
-            });
-
-            if (totaleSimili >= minGare) {
-                for (const corsia in vinciteCorsie) {
-                    const freq = vinciteCorsie[corsia] / totaleSimili;
-                    if (freq >= sogliaFreq) {
-                        reportLines.push(`✔️ Quote simili in corsia ${i + 1} associano vittoria frequente a corsia ${corsia} con frequenza ${(freq * 100).toFixed(1)}%.`);
-                        alertMessages.push(`Quote corsia ${i + 1} suggeriscono vittoria corsia ${corsia}`);
-                    }
-                }
-            }
-        }
-
-        // 3) Coppie di cavalli che insieme sono associate a vincita in corsia (≥60%)
-        // Costruisco mappa coppie -> {tot, count vincita corsia x}
-        const coppieMap = {}; // chiave: "nome1|nome2" valori: { tot: n, vincite: { corsia: count } }
-
-        // Estraggo tutte le coppie di cavalli presenti nella gara nuova
-        for (let a = 0; a < 6; a++) {
-            for (let b = a + 1; b < 6; b++) {
-                const nomeA = nomi[a];
-                const nomeB = nomi[b];
-                if (!nomeA || !nomeB) continue;
-
-                const coppiaKey = [nomeA, nomeB].sort().join('|');
-                if (!coppieMap[coppiaKey]) {
-                    coppieMap[coppiaKey] = { tot: 0, vincite: {} };
-                }
-
-                gare.forEach(g => {
-                    // Controllo se la gara contiene la coppia (in qualsiasi posizione)
-                    const nomiGara = g.nomi;
-                    const hasA = nomiGara.includes(nomeA);
-                    const hasB = nomiGara.includes(nomeB);
-                    if (hasA && hasB) {
-                        coppieMap[coppiaKey].tot++;
-
-                        g.tris.forEach(t => {
-                            const corsie = t.combinazione.split(',').map(x => parseInt(x));
-                            corsie.forEach(c => {
-                                coppieMap[coppiaKey].vincite[c] = (coppieMap[coppiaKey].vincite[c] || 0) + 1;
-                            });
-                        });
-                    }
-                });
-            }
-        }
-
-        // Valuto quali coppie raggiungono la soglia di frequenza per vincita corsia
-        for (const coppia in coppieMap) {
-            const dati = coppieMap[coppia];
-            if (dati.tot >= minGare) {
-                for (const corsia in dati.vincite) {
-                    const freq = dati.vincite[corsia] / dati.tot;
-                    if (freq >= sogliaFreq) {
-                        reportLines.push(`✔️ Coppia cavalli [${coppia.replace('|', ', ')}] associata a vincita corsia ${corsia} nel ${(freq * 100).toFixed(1)}% delle ${dati.tot} gare.`);
-                        alertMessages.push(`Coppia [${coppia.replace('|', ', ')}] spesso vince in corsia ${corsia}`);
-                    }
-                }
-            }
-        }
-
-        // 4) Suggerimento tris (la stessa che avevi)
-        const trisSuggerita = suggerisciTris(nomi, nuoveQuote, gare);
-
-        if (trisSuggerita) {
-            suggerimentoTris = trisSuggerita;
-            reportLines.push(`🧠 Suggerimento tris AI più frequente tra gare simili: ${trisSuggerita.combinazione} (Quota media: ${trisSuggerita.quota})`);
-        } else {
-            reportLines.push("Nessun suggerimento tris AI disponibile (poche gare simili trovate).");
-        }
-
-        const alertMessage = alertMessages.length > 0 ? alertMessages.join('\n') : null;
-        const reportTesto = reportLines.join('\n');
-
-        return { alertMessage, suggerimentoTris, reportTesto };
-    }
-
-    // Funzione usata per suggerire tris come prima, ricavata dal tuo codice
-    function suggerisciTris(nomi, quote, gare) {
-        const soglia = 0.2;
-        // Cerca gare con quote simili (almeno 4 corsie)
-        const gareSimili = gare.filter(g => {
-            let match = 0;
-            for (let i = 0; i < 6; i++) {
-                const q = parseFloat(g.quote[i]);
-                if (Math.abs(q - quote[i]) <= soglia) match++;
-            }
-            return match >= 4;
-        });
-
-        if (gareSimili.length === 0) return null;
-
-        // Conta tris vincenti tra gare simili
-        const trisMap = {};
-        gareSimili.forEach(g => {
-            g.tris.forEach(t => {
-                if (!trisMap[t.combinazione]) trisMap[t.combinazione] = { count: 0, quote: [] };
-                trisMap[t.combinazione].count++;
-                trisMap[t.combinazione].quote.push(parseFloat(t.quota));
-            });
-        });
-
-        const trisOrdinata = Object.entries(trisMap)
-            .sort((a, b) => b[1].count - a[1].count);
-
-        if (trisOrdinata.length === 0) return null;
-
-        const [combinazione, dati] = trisOrdinata[0];
-        const mediaQuota = (dati.quote.reduce((a, b) => a + b, 0) / dati.quote.length).toFixed(2);
-
-        return { combinazione, quota: mediaQuota };
-    }
-
-    // Funzione per mostrare report a schermo
-    function mostraReport(testo) {
-        const div = document.getElementById("report");
-        div.textContent = testo;
-    }
+// Avvio iniziale
+window.addEventListener("DOMContentLoaded", () => {
+  inizializzaTabella();
+  setupAutocomplete();
+});
 </script>
 </body>
 </html>
