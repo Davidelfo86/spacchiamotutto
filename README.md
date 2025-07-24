@@ -94,7 +94,6 @@
 <script>
 const NUM_CORSIE = 6;
 
-// Inizializza la tabella
 function inizializzaTabella() {
   const tbody = document.getElementById("body1");
   for (let i = 1; i <= NUM_CORSIE; i++) {
@@ -108,13 +107,11 @@ function inizializzaTabella() {
   }
 }
 
-// Backup automatico ogni 60 sec
 setInterval(() => {
   const gare = localStorage.getItem("gare");
   if (gare) localStorage.setItem("backup_gare", gare);
 }, 60000);
 
-// Backup manuale JSON
 function exportBackup() {
   const data = localStorage.getItem("gare") || "[]";
   const blob = new Blob([data], { type: "application/json" });
@@ -124,7 +121,6 @@ function exportBackup() {
   link.click();
 }
 
-// Importa backup JSON
 function importaBackup(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -145,7 +141,6 @@ function importaBackup(event) {
   reader.readAsText(file);
 }
 
-// Salva gara
 function salvaGara(index) {
   const { nomi, quote } = getGaraData(index);
   if (nomi.includes("") || quote.includes("")) {
@@ -154,10 +149,19 @@ function salvaGara(index) {
   }
 
   let gare = JSON.parse(localStorage.getItem("gare") || "[]");
-  const garaEsistente = gare.find(g => JSON.stringify(g.nomi) === JSON.stringify(nomi) && JSON.stringify(g.quote) === JSON.stringify(quote));
-  if (garaEsistente) {
+
+  // Controllo gara identica
+  const garaEsatta = gare.find(g => JSON.stringify(g.nomi) === JSON.stringify(nomi) && JSON.stringify(g.quote) === JSON.stringify(quote));
+  if (garaEsatta) {
     alert("Questa gara esiste già.");
     return;
+  }
+
+  // Nuovo controllo: stessi nomi ma quote diverse
+  const stessaCombinazioneNomi = gare.find(g => JSON.stringify(g.nomi) === JSON.stringify(nomi));
+  if (stessaCombinazioneNomi) {
+    const conferma = confirm("Esiste già una gara con gli stessi cavalli, ma quote diverse.\nVuoi salvarla comunque?");
+    if (!conferma) return;
   }
 
   const reportAI = analisiAIAvanzata(nomi, quote, gare);
@@ -174,6 +178,7 @@ function salvaGara(index) {
   localStorage.setItem("gare", JSON.stringify(gare));
   alert("Gara salvata.");
 }
+
 function getGaraData(index) {
   const nomi = [], quote = [];
   for (let i = 1; i <= NUM_CORSIE; i++) {
@@ -191,7 +196,6 @@ function analisiAIAvanzata(nomi, quote, gare) {
   const nuoveQuote = quote.map(q => parseFloat(q));
   const sommaQuote = nuoveQuote.reduce((a, b) => a + b, 0);
   const sogliaQuota = 0.2;
-  const sogliaFreq = 0.5;
   const minGare = 3;
   const patternLabels = quote.map(q => {
     const val = parseFloat(q);
@@ -229,12 +233,10 @@ function analisiAIAvanzata(nomi, quote, gare) {
       report += `✔️ "${nome}" con quota ~${quota.toFixed(2)} → ${perc}% podio (${podio}/${tot})\n`;
     }
 
-    // Statistiche per nome cavallo
     cavalliTotali[nome] = cavalliTotali[nome] || { gare: 0, podi: 0 };
     cavalliTotali[nome].gare += tot;
     cavalliTotali[nome].podi += podio;
 
-    // Statistiche per nome + corsia
     cavalliCorsia[nome] = cavalliCorsia[nome] || {};
     cavalliCorsia[nome][i + 1] = cavalliCorsia[nome][i + 1] || { gare: 0, podi: 0 };
     cavalliCorsia[nome][i + 1].gare += tot;
@@ -274,12 +276,13 @@ function analisiAIAvanzata(nomi, quote, gare) {
 
   return { reportTesto: report };
 }
+
 function setupAutocomplete() {
   const inputs = document.querySelectorAll("input.nome");
   const cavalli = new Set();
   const gare = JSON.parse(localStorage.getItem("gare") || "[]");
   gare.forEach(g => g.nomi.forEach(n => cavalli.add(n)));
-  
+
   inputs.forEach(input => {
     input.addEventListener("input", function() {
       closeLists();
@@ -366,7 +369,13 @@ function exportCSV() {
   link.click();
 }
 
-// Avvio iniziale
+function pulisciTabella(index) {
+  for (let i = 1; i <= NUM_CORSIE; i++) {
+    document.getElementById(`nome${index}_${i}`).value = "";
+    document.getElementById(`quota${index}_${i}`).value = "";
+  }
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   inizializzaTabella();
   setupAutocomplete();
