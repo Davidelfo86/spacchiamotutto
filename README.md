@@ -88,6 +88,7 @@
 <button onclick="exportBackup()">Backup dati (JSON)</button>
 <button onclick="exportCSV()">Esporta in CSV</button>
 <button onclick="document.getElementById('importFile').click()">Importa backup (JSON)</button>
+<button onclick="eliminaGaraPopup()">🗑️ Elimina Gara</button>
 <input type="file" id="importFile" accept=".json" onchange="importaBackup(event)">
 
 <div id="report"></div>
