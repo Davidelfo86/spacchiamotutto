@@ -485,19 +485,55 @@ function cancellaTutto() {
 function exportCSV() {
   const gare = JSON.parse(localStorage.getItem("gare") || "[]");
   if (gare.length === 0) return alert("Nessuna gara da esportare.");
-  let csv = "Gara,Corsia,Nome,Quota,Tris,QuotaTris\n";
+
+  let csv = "Gara;Corsia;Nome;Quota;Tris Vincente;Quota Tris\n";
+
   gare.forEach((g, idx) => {
     g.nomi.forEach((nome, i) => {
-      const tris = g.tris.map(t => t.combinazione).join(" | ");
-      const qt = g.tris.map(t => t.quota).join(" | ");
-      csv += `${idx + 1},${i + 1},${nome},${g.quote[i]},${tris},${qt}\n`;
+      g.tris.forEach(t => {
+        csv += `${idx + 1};${i + 1};${nome};${g.quote[i]};${t.combinazione};${t.quota}\n`;
+      });
     });
   });
-  const blob = new Blob([csv], { type: "text/csv" });
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = `gare_export_${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
+}
+function eliminaGaraPopup() {
+  const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+  if (gare.length === 0) {
+    alert("Nessuna gara salvata.");
+    return;
+  }
+
+  const id = prompt(`Inserisci il numero ID della gara da eliminare (1-${gare.length}):`);
+  if (!id || isNaN(id)) {
+    alert("ID non valido.");
+    return;
+  }
+
+  const index = parseInt(id) - 1;
+  if (index < 0 || index >= gare.length) {
+    alert("ID fuori intervallo.");
+    return;
+  }
+
+  const gara = gare[index];
+  const conferma = confirm(
+    `Vuoi davvero eliminare la gara #${id}?\n\n` +
+    gara.nomi.map((n, i) => `Corsia ${i + 1}: ${n} (Quota: ${gara.quote[i]})`).join("\n") +
+    `\n\nTris:\n${gara.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("\n")}`
+  );
+
+  if (!conferma) return;
+
+  gare.splice(index, 1);
+  localStorage.setItem("gare", JSON.stringify(gare));
+  alert(`Gara #${id} eliminata con successo.`);
+  document.getElementById("report").textContent = "";
 }
 
 function pulisciTabella(index) {
