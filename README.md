@@ -89,6 +89,7 @@
 <button onclick="exportCSV()">Esporta in CSV</button>
 <button onclick="document.getElementById('importFile').click()">Importa backup (JSON)</button>
 <button onclick="eliminaGaraPopup()">🗑️ Elimina Gara</button>
+<button onclick="eliminaTrisSingolaPopup()">➖ Elimina una Tris</button>
 <input type="file" id="importFile" accept=".json" onchange="importaBackup(event)">
 
 <div id="report"></div>
@@ -534,6 +535,51 @@ function eliminaGaraPopup() {
   gare.splice(index, 1);
   localStorage.setItem("gare", JSON.stringify(gare));
   alert(`Gara #${id} eliminata con successo.`);
+  document.getElementById("report").textContent = "";
+}
+function eliminaTrisSingolaPopup() {
+  const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+  if (gare.length === 0) {
+    alert("Nessuna gara salvata.");
+    return;
+  }
+
+  const id = prompt(`Inserisci il numero ID della gara da cui eliminare una tris (1-${gare.length}):`);
+  if (!id || isNaN(id)) {
+    alert("ID non valido.");
+    return;
+  }
+
+  const index = parseInt(id) - 1;
+  if (index < 0 || index >= gare.length) {
+    alert("ID fuori intervallo.");
+    return;
+  }
+
+  const gara = gare[index];
+  if (gara.tris.length === 0) {
+    alert("Questa gara non ha tris salvate.");
+    return;
+  }
+
+  const listaTris = gara.tris.map((t, i) => `#${i + 1} → ${t.combinazione} (Quota: ${t.quota})`).join("\n");
+  const scelta = prompt(
+    `Tris salvate nella gara #${id}:\n${listaTris}\n\nInserisci il numero della tris da eliminare:`
+  );
+
+  const trisIndex = parseInt(scelta) - 1;
+  if (isNaN(trisIndex) || trisIndex < 0 || trisIndex >= gara.tris.length) {
+    alert("Indice tris non valido.");
+    return;
+  }
+
+  const conferma = confirm(`Vuoi davvero eliminare la tris #${scelta}: ${gara.tris[trisIndex].combinazione}?`);
+  if (!conferma) return;
+
+  gara.tris.splice(trisIndex, 1);
+  localStorage.setItem("gare", JSON.stringify(gare));
+
+  alert("Tris eliminata con successo.");
   document.getElementById("report").textContent = "";
 }
 
