@@ -244,13 +244,12 @@ function analisiAIAvanzata(nomi, quote, gare) {
   report += `📊 Pattern quote: ${patternLabels.join("-")}\n`;
   report += `🧮 Somma quote: ${sommaQuote.toFixed(2)}\n\n`;
 
-  let cavalliTotali = {}, cavalliCorsia = {};
-  let quoteStatistiche = {};
   let trisSuggerita = [];
-  let quoteSimili = [];
-  let patternSimili = [];
+  let quoteStatistiche = {};
+  let patternSimili = [], quoteSimili = [];
+  let cavalliGlobale = {}, cavalliCorsia = {}, combinazioniTris = {}, trisCluster = {};
 
-  // Quote storiche simili e pattern simili
+  // Quote simili / pattern simili
   gare.forEach(g => {
     const q = g.quote.map(x => parseFloat(x));
     const patternGara = q.map(qv => qv < 2 ? "B" : qv <= 3.5 ? "M" : "A");
@@ -268,9 +267,43 @@ function analisiAIAvanzata(nomi, quote, gare) {
       }
       quoteStatistiche[intervallo].tot++;
     });
+
+    // Frequenza combinazioni tris
+    g.tris.forEach(t => {
+      const key = t.combinazione.split(",").sort().join("-");
+      combinazioniTris[key] = (combinazioniTris[key] || 0) + 1;
+
+      // Cluster tris per pattern (es. 1-3-6)
+      const clusterKey = t.combinazione.split(",").map(n => parseInt(n)).sort((a, b) => a - b).join("-");
+      trisCluster[clusterKey] = (trisCluster[clusterKey] || 0) + 1;
+    });
+
+    // Cavalli ricorrenti (globale)
+    g.nomi.forEach((n, i) => {
+      const corsia = i + 1;
+      const q = parseFloat(g.quote[i]);
+
+      // Totale apparizioni globali
+      cavalliGlobale[n] = cavalliGlobale[n] || { tot: 0, podio: 0, quote: [], corsie: [] };
+      cavalliGlobale[n].tot++;
+      cavalliGlobale[n].quote.push(q);
+      cavalliGlobale[n].corsie.push(corsia);
+
+      if (g.tris.some(t => t.combinazione.split(",").includes(String(corsia)))) {
+        cavalliGlobale[n].podio++;
+      }
+
+      // Specifico corsia
+      const k = `${n}_C${corsia}`;
+      cavalliCorsia[k] = cavalliCorsia[k] || { tot: 0, podio: 0 };
+      cavalliCorsia[k].tot++;
+      if (g.tris.some(t => t.combinazione.split(",").includes(String(corsia)))) {
+        cavalliCorsia[k].podio++;
+      }
+    });
   });
 
-  // Cavallo favorito e sfavorito
+  // Cavallo favorito / sfavorito
   let minQuota = Math.min(...nuoveQuote);
   let maxQuota = Math.max(...nuoveQuote);
   let favoritoIdx = nuoveQuote.indexOf(minQuota);
@@ -279,133 +312,64 @@ function analisiAIAvanzata(nomi, quote, gare) {
   report += `🏇 Cavallo favorito: ${nomi[favoritoIdx]} (Corsia ${favoritoIdx + 1}, Quota ${minQuota})\n`;
   report += `🐢 Cavallo sfavorito: ${nomi[sfavoritoIdx]} (Corsia ${sfavoritoIdx + 1}, Quota ${maxQuota})\n`;
 
-  // Storico per cavallo favorito
-  let storicoFavorito = gare.filter(g => {
-    const q = g.quote.map(x => parseFloat(x));
-    const min = Math.min(...q);
-    return g.nomi[q.indexOf(min)] === nomi[favoritoIdx];
-  });
-
-  const favoritoPodio = storicoFavorito.filter(g =>
-    g.tris.some(t => t.combinazione.split(",").includes(String(favoritoIdx + 1)))
-  );
-
-  if (storicoFavorito.length > 0) {
-    report += `📊 Il favorito in gare storiche è andato a podio ${favoritoPodio.length} su ${storicoFavorito.length} volte (${((favoritoPodio.length / storicoFavorito.length) * 100).toFixed(1)}%)\n`;
-  } else {
-    report += `📊 Nessuna gara storica trovata per ${nomi[favoritoIdx]} con quota simile.\n`;
-  }
-
-  // Cavallo sfavorito: analisi su podio o vincente
-  let storicoSfavorito = gare.filter(g => g.nomi.includes(nomi[sfavoritoIdx]));
-  let podioSfavorito = 0;
-  let vittorieSfavorito = 0;
-
+  // Analisi cavallo sfavorito: sorprese
+  const storicoSfavorito = gare.filter(g => g.nomi.includes(nomi[sfavoritoIdx]));
+  let sorprese = 0;
   storicoSfavorito.forEach(g => {
     g.tris.forEach(t => {
       const corsie = t.combinazione.split(",");
       const idx = g.nomi.findIndex(n => n === nomi[sfavoritoIdx]);
-      if (idx !== -1 && corsie.includes(String(idx + 1))) {
-        podioSfavorito++;
-        if (corsie[0] === String(idx + 1)) vittorieSfavorito++;
-      }
+      if (idx !== -1 && corsie[0] === String(idx + 1)) sorprese++;
     });
   });
+  if (sorprese > 0) {
+    report += `🎯 Sorpresa: ${sorprese} vittorie del cavallo sfavorito storico!\n`;
+  }
 
-  if (storicoSfavorito.length > 0) {
-    report += `📊 Il cavallo sfavorito è andato a podio ${podioSfavorito} su ${storicoSfavorito.length} gare (${((podioSfavorito / storicoSfavorito.length) * 100).toFixed(1)}%)\n`;
-    if (vittorieSfavorito > 0) {
-      report += `🎉 Ha vinto ${vittorieSfavorito} volte! Possibile sorpresa.\n`;
+  // 📌 Cavalli ricorrenti (storico globale)
+  report += `\n📌 Cavalli ricorrenti (storico globale):\n`;
+  Object.entries(cavalliGlobale).forEach(([nome, stats]) => {
+    if (stats.tot >= minGareAnalisi) {
+      const perc = (stats.podio / stats.tot) * 100;
+      const avg = stats.quote.reduce((a, b) => a + b, 0) / stats.quote.length;
+      report += `→ ${nome}: ${perc.toFixed(1)}% podio su ${stats.tot} gare | Quota media: ${avg.toFixed(2)}\n`;
+      trisSuggerita.push({ nome, perc, corsie: stats.corsie });
+    }
+  });
+
+  // 📌 Cavalli che fanno spesso podio ma non vincono
+  report += `\n📌 Cavalli “quasi vincenti” (frequenti ma mai primi):\n`;
+  for (let [nome, stats] of Object.entries(cavalliGlobale)) {
+    let primi = 0;
+    gare.forEach(g => {
+      const idx = g.nomi.indexOf(nome);
+      if (idx !== -1) {
+        g.tris.forEach(t => {
+          if (t.combinazione.split(",")[0] === String(idx + 1)) primi++;
+        });
+      }
+    });
+    if (stats.tot >= minGareAnalisi && stats.podio > 0 && primi === 0) {
+      report += `→ ${nome}: ${stats.podio} podi, 0 vittorie su ${stats.tot} gare!\n`;
     }
   }
 
-  // Analisi per cavallo globale
-  report += `\n📌 Analisi per cavallo globale:\n`;
-  nomi.forEach((nome, i) => {
-    let tot = 0, podio = 0;
-    gare.forEach(g => {
-      for (let j = 0; j < g.nomi.length; j++) {
-        if (g.nomi[j] === nome && Math.abs(parseFloat(g.quote[j]) - nuoveQuote[i]) <= 0.2) {
-          tot++;
-          if (g.tris.some(t => t.combinazione.split(",").includes(String(j + 1)))) podio++;
-        }
-      }
-    });
-    if (tot >= minGareAnalisi) {
-      report += `→ ${nome}: ${(podio / tot * 100).toFixed(1)}% podio su ${tot} gare\n`;
-      trisSuggerita.push({ nome, corsia: i + 1, perc: podio / tot, tot });
-    }
+  // 🎯 Cluster tris frequenti
+  report += `\n📌 Cluster di tris vincenti ricorrenti:\n`;
+  Object.entries(trisCluster).filter(([k, v]) => v > 1).forEach(([k, v]) => {
+    report += `→ Combinazione ${k.replace(/-/g, ",")}: ${v} volte\n`;
   });
 
-  // Analisi cavallo + corsia
-  report += `\n📌 Analisi cavallo + corsia:\n`;
-  nomi.forEach((nome, i) => {
-    let tot = 0, podio = 0;
-    gare.forEach(g => {
-      if (g.nomi[i] === nome && Math.abs(parseFloat(g.quote[i]) - nuoveQuote[i]) <= 0.2) {
-        tot++;
-        if (g.tris.some(t => t.combinazione.split(",").includes(String(i + 1)))) podio++;
-      }
-    });
-    if (tot >= minGareAnalisi) {
-      report += `→ ${nome} in corsia ${i + 1}: ${(podio / tot * 100).toFixed(1)}% podio\n`;
-    }
-  });
-
-  // Tris consigliata
-  report += `\n🎯 Tris consigliata:\n`;
+  // 🧪 Predizione tris AI (se almeno 3 cavalli hanno %)
+  report += `\n🤖 Predizione Tris AI (Top 3 cavalli):\n`;
   if (trisSuggerita.length >= 3) {
-    const tris = trisSuggerita.sort((a, b) => b.perc - a.perc).slice(0, 3);
-    tris.forEach(c => {
-      report += `→ ${c.nome} (Corsia ${c.corsia}) - ${(c.perc * 100).toFixed(1)}% podio su ${c.tot} gare\n`;
+    const trisFinale = trisSuggerita.sort((a, b) => b.perc - a.perc).slice(0, 3);
+    trisFinale.forEach((c, i) => {
+      const corsia = c.corsie.length ? c.corsie[0] : "?";
+      report += `#${i + 1} → ${c.nome} (Corsia tipica: ${corsia}) - ${c.perc.toFixed(1)}%\n`;
     });
   } else {
-    report += `Nessuna tris consigliata: servono almeno 3 cavalli con ${minGareAnalisi} gare analizzate.\n`;
-  }
-
-  // Quote spesso vincenti
-  report += `\n📌 Quote spesso vincenti:\n`;
-  Object.keys(quoteStatistiche).sort((a, b) => parseFloat(a) - parseFloat(b)).forEach(q => {
-    const { podi, tot } = quoteStatistiche[q];
-    if (tot >= 5) {
-      report += `→ Quota ${q}: ${podi} su ${tot} podio (${(podi / tot * 100).toFixed(1)}%)\n`;
-    }
-  });
-
-  // Quote alte
-  if (sommaQuote >= 18) {
-    report += `\n📌 Quote alte e somma quote:\nAttenzione: somma alta. Quote >3.5:\n`;
-    nuoveQuote.forEach((q, i) => {
-      if (q > 3.5) report += `→ ${nomi[i]} (Corsia ${i + 1}, Quota ${q})\n`;
-    });
-  }
-
-  // Gare con quote simili
-  if (quoteSimili.length > 0) {
-    report += `\n📌 Gare storiche con quote simili: ${quoteSimili.length}\n`;
-    quoteSimili.forEach((g, i) => {
-      g.tris.forEach(t => {
-        report += `🧩 Gara ${i + 1} → Tris: ${t.combinazione} (Quota: ${t.quota})\n`;
-      });
-    });
-  }
-
-  // Gare con pattern simile e sorprese
-  if (patternSimili.length > 0) {
-    let sorprese = 0;
-    patternSimili.forEach(g => {
-      g.tris.forEach(t => {
-        const primaCorsia = parseInt(t.combinazione.split(",")[0]) - 1;
-        const quotaVincente = parseFloat(g.quote[primaCorsia]);
-        if (quotaVincente > 10) sorprese++;
-      });
-    });
-    report += `\n📈 Gare con pattern quote simile: ${patternSimili.length}`;
-    if (sorprese > 0) {
-      report += ` → In ${sorprese} di queste ha vinto un cavallo con quota >10!\n`;
-    } else {
-      report += ` → Nessuna sorpresa rilevata in quelle gare.\n`;
-    }
+    report += `Non abbastanza dati per una predizione affidabile.\n`;
   }
 
   return { reportTesto: report };
