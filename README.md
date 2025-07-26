@@ -192,12 +192,16 @@ function salvaGara(index) {
     if (!confirm(msg + `\n\nVuoi salvare comunque?`)) return;
   }
 
-  // Esegui analisi AI PRIMA di chiedere la tris
+  // Esegui analisi AI
   const reportAI = analisiAIAvanzata(nomi, quote, gare);
-  mostraReport(reportAI.reportTesto);
 
-  // Chiedi se vuoi procedere
-  if (!confirm("Vuoi procedere con il salvataggio della gara dopo l’analisi AI?")) return;
+  // Chiedi conferma
+  if (!confirm("Vuoi procedere con il salvataggio della gara dopo l’analisi AI?")) {
+    mostraReport(reportAI.reportTesto); // mostra il riquadro AI se clicchi Annulla
+    return;
+  }
+
+  mostraReport(reportAI.reportTesto); // opzionale anche qui
 
   // Gara identica già salvata
   const garaEsatta = gare.find(g => JSON.stringify(g.nomi) === nomiStr && JSON.stringify(g.quote.map(q => parseFloat(q).toFixed(2))) === quoteStr);
@@ -558,10 +562,27 @@ function pulisciTabella(index) {
 window.addEventListener("DOMContentLoaded", () => {
   inizializzaTabella();
   setupAutocomplete();
+  startAIWatcher();
 });
 function startVoiceInput() {
   if (!('webkitSpeechRecognition' in window)) {
     alert("Il tuo browser non supporta la dettatura vocale (funziona solo su Chrome).");
+    return;
+  }
+
+  const nomiMancanti = [];
+  const quoteMancanti = [];
+  for (let i = 1; i <= 6; i++) {
+    const nomeInput = document.getElementById(`nome1_${i}`);
+    const quotaInput = document.getElementById(`quota1_${i}`);
+    if (nomeInput.value.trim() === "" || quotaInput.value.trim() === "") {
+      nomiMancanti.push(nomeInput);
+      quoteMancanti.push(quotaInput);
+    }
+  }
+
+  if (nomiMancanti.length === 0) {
+    alert("Hai già inserito tutti e 6 i cavalli. Pulisci la tabella o modifica manualmente.");
     return;
   }
 
@@ -570,8 +591,9 @@ function startVoiceInput() {
   recognition.continuous = false;
   recognition.interimResults = false;
 
-  recognition.onstart = () => alert("🎙️ Inizia a parlare: nome + quota (es. 'Marcello 4.5')");
-  
+  recognition.onstart = () =>
+    alert(`🎙️ Inizia a parlare: nome + quota (es. 'Marcello 4.5') – Cavalli mancanti: ${nomiMancanti.length}`);
+
   recognition.onerror = (event) => alert("Errore nella dettatura: " + event.error);
 
   recognition.onresult = function(event) {
@@ -582,30 +604,63 @@ function startVoiceInput() {
     const quote = [];
 
     for (let i = 0; i < parole.length - 1; i++) {
-      const nome = parole[i];
       const possibileQuota = parseFloat(parole[i + 1].replace(",", "."));
       if (!isNaN(possibileQuota)) {
-        nomi.push(nome);
+        nomi.push(parole[i]);
         quote.push(possibileQuota);
-        i++; // salta la quota appena letta
+        i++; // salta la quota già usata
       }
     }
 
-    if (nomi.length !== 6 || quote.length !== 6) {
-      alert("⚠️ Riconosciuti solo " + nomi.length + " cavalli. Assicurati di dirne 6 con le rispettive quote.");
+    const daInserire = Math.min(nomi.length, nomiMancanti.length);
+
+    if (daInserire === 0) {
+      alert("⚠️ Nessuna combinazione nome + quota valida riconosciuta.");
       return;
     }
 
-    // Inserisci nella tabella
-    for (let i = 0; i < 6; i++) {
-      document.getElementById(`nome1_${i + 1}`).value = nomi[i];
-      document.getElementById(`quota1_${i + 1}`).value = quote[i];
+    for (let i = 0; i < daInserire; i++) {
+      nomiMancanti[i].value = nomi[i];
+      quoteMancanti[i].value = quote[i];
     }
 
-    alert("✅ Cavalli inseriti automaticamente!");
+    alert(`✅ Inseriti ${daInserire} cavalli. Ne mancano ancora ${6 - (6 - nomiMancanti.length + daInserire)}.`);
   };
 
   recognition.start();
+}
+function startAIWatcher() {
+  let ultimaFirma = "";
+
+  // Analisi iniziale immediata (se i dati sono già compilati)
+  const iniziale = getGaraData(1);
+  if (!iniziale.nomi.includes("") && !iniziale.quote.includes("")) {
+    const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+    const reportAI = analisiAIAvanzata(iniziale.nomi, iniziale.quote, gare);
+    mostraReport(reportAI.reportTesto);
+    ultimaFirma = iniziale.nomi.join("|") + "::" + iniziale.quote.join("|");
+  }
+
+  // Avvia il watcher ogni secondo
+  setInterval(() => {
+    const { nomi, quote } = getGaraData(1);
+
+    // Se non sono completi i dati, esci
+    if (nomi.includes("") || quote.includes("")) return;
+
+    // Firma attuale della gara (per evitare analisi duplicate)
+    const firmaAttuale = nomi.join("|") + "::" + quote.join("|");
+
+    // Se la firma è uguale alla precedente, non rifare analisi
+    if (firmaAttuale === ultimaFirma) return;
+
+    // Nuova analisi
+    const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+    const reportAI = analisiAIAvanzata(nomi, quote, gare);
+    mostraReport(reportAI.reportTesto);
+
+    ultimaFirma = firmaAttuale;
+  }, 1000); // ogni 1 secondo
 }
 </script>
 </body>
