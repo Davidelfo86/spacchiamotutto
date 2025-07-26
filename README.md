@@ -80,6 +80,7 @@
     <button onclick="salvaGara(1)">Salva</button>
     <button onclick="pulisciTabella(1)">Pulisci Tabella</button>
     <button onclick="cercaGare()">Cerca</button>
+    <button onclick="startVoiceInput()">🎙️ Detta cavalli</button>
   </div>
 </div>
 
@@ -558,6 +559,54 @@ window.addEventListener("DOMContentLoaded", () => {
   inizializzaTabella();
   setupAutocomplete();
 });
+function startVoiceInput() {
+  if (!('webkitSpeechRecognition' in window)) {
+    alert("Il tuo browser non supporta la dettatura vocale (funziona solo su Chrome).");
+    return;
+  }
+
+  const recognition = new webkitSpeechRecognition();
+  recognition.lang = "it-IT";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  recognition.onstart = () => alert("🎙️ Inizia a parlare: nome + quota (es. 'Marcello 4.5')");
+  
+  recognition.onerror = (event) => alert("Errore nella dettatura: " + event.error);
+
+  recognition.onresult = function(event) {
+    const transcript = event.results[0][0].transcript;
+    const parole = transcript.trim().split(/\s+/);
+
+    const nomi = [];
+    const quote = [];
+
+    for (let i = 0; i < parole.length - 1; i++) {
+      const nome = parole[i];
+      const possibileQuota = parseFloat(parole[i + 1].replace(",", "."));
+      if (!isNaN(possibileQuota)) {
+        nomi.push(nome);
+        quote.push(possibileQuota);
+        i++; // salta la quota appena letta
+      }
+    }
+
+    if (nomi.length !== 6 || quote.length !== 6) {
+      alert("⚠️ Riconosciuti solo " + nomi.length + " cavalli. Assicurati di dirne 6 con le rispettive quote.");
+      return;
+    }
+
+    // Inserisci nella tabella
+    for (let i = 0; i < 6; i++) {
+      document.getElementById(`nome1_${i + 1}`).value = nomi[i];
+      document.getElementById(`quota1_${i + 1}`).value = quote[i];
+    }
+
+    alert("✅ Cavalli inseriti automaticamente!");
+  };
+
+  recognition.start();
+}
 </script>
 </body>
 </html>
