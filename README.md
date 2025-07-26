@@ -238,7 +238,7 @@ function salvaGara(index) {
 function analisiAIAvanzata(nomi, quote, gare) {
   const nuoveQuote = quote.map(q => parseFloat(q));
   const sommaQuote = nuoveQuote.reduce((a, b) => a + b, 0);
-  const minGareAnalisi = 10;
+  const minGareAnalisi = 5;
   const patternLabels = nuoveQuote.map(q => {
     if (q < 2) return "B";
     if (q <= 3.5) return "M";
