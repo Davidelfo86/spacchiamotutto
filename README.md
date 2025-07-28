@@ -104,8 +104,8 @@ function inizializzaTabella() {
     tbody.innerHTML += `
       <tr>
         <td>${i}</td>
-        <td><input type="text" id="nome1_${i}" class="nome" autocomplete="off" /></td>
-        <td><input type="number" step="0.01" id="quota1_${i}" class="quota" /></td>
+        <td><input type="text" id="nome1_${i}" class="nome" name="cavallo${i}" autocomplete="off" /></td>
+<td><input type="number" step="0.01" id="quota1_${i}" class="quota" name="quota${i}" /></td>
       </tr>
     `;
   }
@@ -147,12 +147,22 @@ function importaBackup(event) {
   };
   reader.readAsText(file);
 }
-function getGaraData(index) {
-  const nomi = [], quote = [];
-  for (let i = 1; i <= NUM_CORSIE; i++) {
-    nomi.push(document.getElementById(`nome${index}_${i}`).value.trim());
-    quote.push(document.getElementById(`quota${index}_${i}`).value.trim());
-  }
+function capitalize(str) {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+function getGaraData(numeroGara) {
+  const nomi = [];
+  const quote = [];
+
+  document.querySelectorAll(`#gara${numeroGara} input[name^="cavallo"]`).forEach(input => {
+    nomi.push(capitalize(input.value.trim()));
+  });
+
+  document.querySelectorAll(`#gara${numeroGara} input[name^="quota"]`).forEach(input => {
+    quote.push(input.value.trim());
+  });
+
   return { nomi, quote };
 }
 
@@ -254,13 +264,14 @@ function analisiAIAvanzata(nomi, quote, gare) {
   let patternSimili = [], quoteSimili = [];
   let cavalliGlobale = {}, cavalliCorsia = {}, combinazioniTris = {}, trisCluster = {};
 
+  // Analisi gare storiche
   gare.forEach(g => {
     const q = g.quote.map(x => parseFloat(x));
     const patternGara = q.map(qv => qv < 2 ? "B" : qv <= 3.5 ? "M" : "A");
     const matchCount = patternGara.filter((v, i) => v === patternLabels[i]).length;
     if (matchCount >= 5) patternSimili.push(g);
 
-    const simili = q.filter((val, i) => Math.abs(val - nuoveQuote[i]) <= 0.2).length;
+    const simili = q.filter((val, i) => Math.abs(val - nuoveQuote[i]) <= 0.3).length;
     if (simili >= 5) quoteSimili.push(g);
 
     q.forEach((val, idx) => {
@@ -273,7 +284,7 @@ function analisiAIAvanzata(nomi, quote, gare) {
     });
 
     g.nomi.forEach((n, i) => {
-      if (!nomi.includes(n)) return; // <-- solo cavalli attuali
+      if (!nomi.includes(n)) return; // Solo cavalli della gara attuale
       const corsia = i + 1;
       const q = parseFloat(g.quote[i]);
 
@@ -301,6 +312,7 @@ function analisiAIAvanzata(nomi, quote, gare) {
     });
   });
 
+  // Cavallo favorito e sfavorito
   const minQuota = Math.min(...nuoveQuote);
   const maxQuota = Math.max(...nuoveQuote);
   const favoritoIdx = nuoveQuote.indexOf(minQuota);
@@ -309,12 +321,13 @@ function analisiAIAvanzata(nomi, quote, gare) {
   report += `🏇 Cavallo favorito: ${nomi[favoritoIdx]} (Corsia ${favoritoIdx + 1}, Quota ${minQuota})\n`;
   report += `🐢 Cavallo sfavorito: ${nomi[sfavoritoIdx]} (Corsia ${sfavoritoIdx + 1}, Quota ${maxQuota})\n`;
 
+  // Sorprese storiche del cavallo sfavorito
   const storicoSfavorito = gare.filter(g => g.nomi.includes(nomi[sfavoritoIdx]));
   let sorprese = 0;
   storicoSfavorito.forEach(g => {
     g.tris.forEach(t => {
       const corsie = t.combinazione.split(",");
-      const idx = g.nomi.findIndex(n => n === nomi[sfavoritoIdx]);
+      const idx = g.nomi.indexOf(nomi[sfavoritoIdx]);
       if (idx !== -1 && corsie[0] === String(idx + 1)) sorprese++;
     });
   });
@@ -322,6 +335,7 @@ function analisiAIAvanzata(nomi, quote, gare) {
     report += `🎯 Sorpresa: ${sorprese} vittorie del cavallo sfavorito storico!\n`;
   }
 
+  // Cavalli ricorrenti (solo quelli della gara attuale)
   report += `\n📌 Cavalli ricorrenti (storico della gara attuale):\n`;
   Object.entries(cavalliGlobale).forEach(([nome, stats]) => {
     if (stats.tot >= minGareAnalisi) {
@@ -332,6 +346,7 @@ function analisiAIAvanzata(nomi, quote, gare) {
     }
   });
 
+  // Cavalli quasi vincenti
   report += `\n📌 Cavalli “quasi vincenti” (presenti in gara):\n`;
   for (let [nome, stats] of Object.entries(cavalliGlobale)) {
     let primi = 0;
@@ -348,11 +363,13 @@ function analisiAIAvanzata(nomi, quote, gare) {
     }
   }
 
+  // Cluster tris ricorrenti
   report += `\n📌 Cluster di tris vincenti ricorrenti:\n`;
   Object.entries(trisCluster).filter(([k, v]) => v > 1).forEach(([k, v]) => {
     report += `→ Combinazione ${k.replace(/-/g, ",")}: ${v} volte\n`;
   });
 
+  // Predizione tris AI
   report += `\n🤖 Predizione Tris AI (solo cavalli in gara):\n`;
   if (trisSuggerita.length >= 3) {
     const trisFinale = trisSuggerita.sort((a, b) => b.perc - a.perc).slice(0, 3);
@@ -362,6 +379,32 @@ function analisiAIAvanzata(nomi, quote, gare) {
     });
   } else {
     report += `Non abbastanza dati per una predizione affidabile.\n`;
+  }
+
+  // Confronto quote vincitrici con gare storiche simili
+  report += `\n📊 Confronto con gare storiche simili:\n`;
+  let sorpresePattern = 0, sorpreseQuote = 0;
+  patternSimili.forEach(g => {
+    const q = g.quote.map(v => parseFloat(v));
+    const vincente = parseInt(g.tris[0]?.combinazione.split(",")[0]) - 1;
+    if (q[vincente] > 10) sorpresePattern++;
+  });
+  quoteSimili.forEach(g => {
+    const q = g.quote.map(v => parseFloat(v));
+    const vincente = parseInt(g.tris[0]?.combinazione.split(",")[0]) - 1;
+    if (q[vincente] > 10) sorpreseQuote++;
+  });
+
+  if (patternSimili.length > 0) {
+    const perc = ((sorpresePattern / patternSimili.length) * 100).toFixed(1);
+    report += `→ ${patternSimili.length} gare con pattern simile. In ${sorpresePattern} ha vinto quota >10 (${perc}%)\n`;
+  }
+  if (quoteSimili.length > 0) {
+    const perc = ((sorpreseQuote / quoteSimili.length) * 100).toFixed(1);
+    report += `→ ${quoteSimili.length} gare con quote simili. In ${sorpreseQuote} ha vinto quota >10 (${perc}%)\n`;
+  }
+  if (!patternSimili.length && !quoteSimili.length) {
+    report += `→ Nessuna gara simile trovata.\n`;
   }
 
   return { reportTesto: report };
@@ -552,66 +595,40 @@ window.addEventListener("DOMContentLoaded", () => {
   startAIWatcher();
 });
 function startVoiceInput() {
-  if (!('webkitSpeechRecognition' in window)) {
-    alert("Il tuo browser non supporta la dettatura vocale (funziona solo su Chrome).");
-    return;
-  }
-
-  const nomiMancanti = [];
-  const quoteMancanti = [];
-  for (let i = 1; i <= 6; i++) {
-    const nomeInput = document.getElementById(`nome1_${i}`);
-    const quotaInput = document.getElementById(`quota1_${i}`);
-    if (nomeInput.value.trim() === "" || quotaInput.value.trim() === "") {
-      nomiMancanti.push(nomeInput);
-      quoteMancanti.push(quotaInput);
-    }
-  }
-
-  if (nomiMancanti.length === 0) {
-    alert("Hai già inserito tutti e 6 i cavalli. Pulisci la tabella o modifica manualmente.");
-    return;
-  }
-
-  const recognition = new webkitSpeechRecognition();
+  const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
   recognition.lang = "it-IT";
-  recognition.continuous = false;
   recognition.interimResults = false;
-
-  recognition.onstart = () =>
-    alert(`🎙️ Inizia a parlare: nome + quota (es. 'Marcello 4.5') – Cavalli mancanti: ${nomiMancanti.length}`);
-
-  recognition.onerror = (event) => alert("Errore nella dettatura: " + event.error);
+  recognition.maxAlternatives = 1;
 
   recognition.onresult = function(event) {
-    const transcript = event.results[0][0].transcript;
-    const parole = transcript.trim().split(/\s+/);
+    const result = event.results[0][0].transcript;
 
-    const nomi = [];
-    const quote = [];
+    // Accetta anche "punto" come separatore oltre a "virgola" e ","
+    const righe = result.split(/virgola|punto|,|\./i);
 
-    for (let i = 0; i < parole.length - 1; i++) {
-      const possibileQuota = parseFloat(parole[i + 1].replace(",", "."));
-      if (!isNaN(possibileQuota)) {
-        nomi.push(parole[i]);
-        quote.push(possibileQuota);
-        i++; // salta la quota già usata
+    righe.forEach((riga, i) => {
+      const parts = riga.trim().split(" ");
+      if (parts.length >= 2) {
+        const nome = capitalize(parts.slice(0, -1).join(" ").trim());
+        const quota = parts[parts.length - 1].replace(",", ".").trim();
+        const inputNome = document.querySelector(`#gara1 input[name="cavallo${i + 1}"]`);
+        const inputQuota = document.querySelector(`#gara1 input[name="quota${i + 1}"]`);
+        if (inputNome && inputQuota) {
+          inputNome.value = nome;
+          inputQuota.value = quota;
+        }
       }
-    }
+    });
 
-    const daInserire = Math.min(nomi.length, nomiMancanti.length);
+    // Analisi AI automatica subito dopo la dettatura
+    const dati = getGaraData(1);
+    const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+    const reportAI = analisiAIAvanzata(dati.nomi, dati.quote, gare);
+    mostraReport(reportAI.reportTesto);
+  };
 
-    if (daInserire === 0) {
-      alert("⚠️ Nessuna combinazione nome + quota valida riconosciuta.");
-      return;
-    }
-
-    for (let i = 0; i < daInserire; i++) {
-      nomiMancanti[i].value = nomi[i];
-      quoteMancanti[i].value = quote[i];
-    }
-
-    alert(`✅ Inseriti ${daInserire} cavalli. Ne mancano ancora ${6 - (6 - nomiMancanti.length + daInserire)}.`);
+  recognition.onerror = function(event) {
+    alert("Errore nella dettatura vocale: " + event.error);
   };
 
   recognition.start();
@@ -619,35 +636,108 @@ function startVoiceInput() {
 function startAIWatcher() {
   let ultimaFirma = "";
 
-  // Analisi iniziale immediata (se i dati sono già compilati)
+  // Analisi iniziale se i dati sono già completi
   const iniziale = getGaraData(1);
   if (!iniziale.nomi.includes("") && !iniziale.quote.includes("")) {
     const gare = JSON.parse(localStorage.getItem("gare") || "[]");
     const reportAI = analisiAIAvanzata(iniziale.nomi, iniziale.quote, gare);
     mostraReport(reportAI.reportTesto);
     ultimaFirma = iniziale.nomi.join("|") + "::" + iniziale.quote.join("|");
+    aggiornaBadgeOrario();
   }
 
-  // Avvia il watcher ogni secondo
+  // Tooltip su ogni input cavallo o quota (facoltativo, ma utile)
+  document.querySelectorAll("#gara1 input").forEach(input => {
+    input.title = "Modifica per aggiornare l'analisi AI";
+  });
+
+  // Badge orario AI
+  let badge = document.getElementById("badgeAI");
+  if (!badge) {
+    badge = document.createElement("div");
+    badge.id = "badgeAI";
+    badge.style.position = "absolute";
+    badge.style.top = "10px";
+    badge.style.right = "10px";
+    badge.style.padding = "6px 12px";
+    badge.style.background = "#d0ebff";
+    badge.style.border = "1px solid #339af0";
+    badge.style.borderRadius = "8px";
+    badge.style.fontSize = "12px";
+    badge.style.fontFamily = "monospace";
+    badge.style.zIndex = 999;
+    document.body.appendChild(badge);
+  }
+
+  function aggiornaBadgeOrario() {
+    const ora = new Date();
+    const orario = ora.toLocaleTimeString("it-IT", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    badge.innerText = `AI aggiornata alle ${orario}`;
+  }
+
+  // Watcher ogni secondo
   setInterval(() => {
     const { nomi, quote } = getGaraData(1);
-
-    // Se non sono completi i dati, esci
     if (nomi.includes("") || quote.includes("")) return;
 
-    // Firma attuale della gara (per evitare analisi duplicate)
     const firmaAttuale = nomi.join("|") + "::" + quote.join("|");
-
-    // Se la firma è uguale alla precedente, non rifare analisi
     if (firmaAttuale === ultimaFirma) return;
 
-    // Nuova analisi
     const gare = JSON.parse(localStorage.getItem("gare") || "[]");
     const reportAI = analisiAIAvanzata(nomi, quote, gare);
     mostraReport(reportAI.reportTesto);
 
     ultimaFirma = firmaAttuale;
-  }, 1000); // ogni 1 secondo
+    aggiornaBadgeOrario();
+  }, 1000);
+}
+function mostraOrarioAggiornamento() {
+  const now = new Date();
+  const orario = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const div = document.getElementById("ai-status");
+  if (div) {
+    div.textContent = `🔄 Analisi aggiornata alle ${orario}`;
+  } else {
+    const newDiv = document.createElement("div");
+    newDiv.id = "ai-status";
+    newDiv.style = "margin-top:5px; font-size: 0.9em; color: gray;";
+    newDiv.textContent = `🔄 Analisi aggiornata alle ${orario}`;
+    document.getElementById("report-ai")?.appendChild(newDiv);
+  }
+}
+
+function mostraBadgeNuoviCavalli(nomi, gare) {
+  const storici = gare.flatMap(g => g.nomi);
+  document.querySelectorAll("#tabella-gara-1 input.nome").forEach(input => {
+    if (!input.value) return;
+    const esiste = storici.includes(input.value.trim());
+    input.style.border = esiste ? "" : "2px solid orange";
+    input.title = esiste ? "" : "🆕 Cavallo mai visto prima nello storico!";
+  });
+}
+
+function mostraTooltipQuote(quote, gare) {
+  const quoteMap = {};
+
+  gare.forEach(g => {
+    g.quote.forEach((q, i) => {
+      const val = parseFloat(q);
+      if (!quoteMap[val]) quoteMap[val] = { podi: 0, tot: 0 };
+
+      const corsiePodio = g.tris.flatMap(t => t.combinazione.split(",").map(n => parseInt(n)));
+      if (corsiePodio.includes(i + 1)) quoteMap[val].podi++;
+      quoteMap[val].tot++;
+    });
+  });
+
+  document.querySelectorAll("#tabella-gara-1 input.quota").forEach(input => {
+    const val = parseFloat(input.value);
+    if (!val || !quoteMap[val]) return;
+
+    const data = quoteMap[val];
+    const perc = ((data.podi / data.tot) * 100).toFixed(1);
+    input.title = `📊 Quota ${val} → ${perc}% podio su ${data.tot} casi`;
+  });
 }
 </script>
 </body>
