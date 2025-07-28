@@ -83,8 +83,8 @@
     <button onclick="cercaGare()">Cerca</button>
     <button onclick="startVoiceInput()">🎙️ Detta cavalli</button>
 
-    <label for="imageUpload">📸 Estrai da foto</label>
-    <input type="file" id="imageUpload" accept="image/*" style="display: block; margin-top: 5px;">
+    <input type="file" id="imageUpload" accept="image/*" style="margin-bottom: 10px;">
+    <button onclick="analizzaFotoSelezionata()">📸 Estrai da foto</button>
   </div>
 </div>
 
@@ -794,6 +794,54 @@ window.addEventListener("DOMContentLoaded", function () {
     });
   });
 });
+</script>
+function analizzaFotoSelezionata() {
+  const input = document.getElementById("imageUpload");
+  const file = input.files[0];
+  if (!file) {
+    alert("Per favore seleziona una foto prima.");
+    return;
+  }
+
+  Tesseract.recognize(
+    file,
+    'ita',
+    { logger: m => console.log(m) }
+  ).then(({ data: { text } }) => {
+    console.log("Testo OCR:", text);
+    const righe = text.split("\n").map(r => r.trim()).filter(r => r);
+
+    const cavalli = [];
+    const quote = [];
+
+    righe.forEach(riga => {
+      const match = riga.match(/^\d+\s+([A-Za-zÀ-ÿ\s']+)\s+(\d+[\.,]?\d*)$/);
+      if (match) {
+        const nome = capitalize(match[1].trim());
+        const quota = match[2].replace(",", ".");
+        cavalli.push(nome);
+        quote.push(quota);
+      }
+    });
+
+    for (let i = 0; i < cavalli.length && i < 6; i++) {
+      const inputNome = document.querySelector(`#gara1 input[name="cavallo${i + 1}"]`);
+      const inputQuota = document.querySelector(`#gara1 input[name="quota${i + 1}"]`);
+      if (inputNome && inputQuota) {
+        inputNome.value = cavalli[i];
+        inputQuota.value = quote[i];
+      }
+    }
+
+    const dati = getGaraData(1);
+    const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+    const reportAI = analisiAIAvanzata(dati.nomi, dati.quote, gare);
+    mostraReport(reportAI.reportTesto);
+  }).catch(err => {
+    console.error("Errore OCR:", err);
+    alert("Errore durante la lettura della foto.");
+  });
+}
 </script>
 </body>
 </html>
