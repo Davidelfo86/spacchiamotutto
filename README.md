@@ -250,10 +250,11 @@ function analisiAIAvanzata(nomi, quote, gare) {
   const sommaQuote = nuoveQuote.reduce((a, b) => a + b, 0);
   const minGareAnalisi = 5;
   const patternLabels = nuoveQuote.map(q => {
-    if (q < 2) return "B";
-    if (q <= 3.5) return "M";
-    return "A";
-  });
+    if (q <= 2.5) return "B";
+    if (q <= 6.5) return "M";
+    if (q <= 9.9) return "A";
+    return "SA";
+});
 
   let report = `🧠 ANALISI INTELLIGENTE\n----------------------\n`;
   report += `📊 Pattern quote: ${patternLabels.join("-")}\n`;
