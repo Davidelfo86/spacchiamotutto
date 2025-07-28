@@ -76,7 +76,38 @@
   <div class="gara">
     <table id="gara1">
       <thead><tr><th>Corsia</th><th>Nome</th><th>Quota</th></tr></thead>
-      <tbody id="body1"></tbody>
+      <tbody id="body1">
+  <tr>
+    <td>1</td>
+    <td><input name="cavallo1" class="nome" /></td>
+    <td><input name="quota1" class="quota" /></td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td><input name="cavallo2" class="nome" /></td>
+    <td><input name="quota2" class="quota" /></td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td><input name="cavallo3" class="nome" /></td>
+    <td><input name="quota3" class="quota" /></td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td><input name="cavallo4" class="nome" /></td>
+    <td><input name="quota4" class="quota" /></td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td><input name="cavallo5" class="nome" /></td>
+    <td><input name="quota5" class="quota" /></td>
+  </tr>
+  <tr>
+    <td>6</td>
+    <td><input name="cavallo6" class="nome" /></td>
+    <td><input name="quota6" class="quota" /></td>
+  </tr>
+</tbody>
     </table>
     <button onclick="salvaGara(1)">Salva</button>
     <button onclick="pulisciTabella(1)">Pulisci Tabella</button>
