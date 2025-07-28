@@ -765,10 +765,11 @@ function analizzaFotoSelezionata() {
     const quote = [];
 
     righe.forEach(riga => {
-      const match = riga.match(/^\d+\s+([A-Za-zÀ-ÿ\s']+)\s+(\d+[\.,]?\d*)$/);
+      // Cerca riga tipo: "1 Nome Cavallo 2.50 ..."
+      const match = riga.match(/^(\d+)\s+([A-Za-zÀ-ÿ\s']+?)\s+(\d+[\.,]?\d*)/);
       if (match) {
-        const nome = capitalize(match[1].trim());
-        const quota = match[2].replace(",", ".");
+        const nome = capitalize(match[2].trim());
+        const quota = match[3].replace(",", ".");
         cavalli.push(nome);
         quote.push(quota);
       }
