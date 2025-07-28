@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <title>Archivio Gare Cavalli</title>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2/dist/tesseract.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -76,46 +75,12 @@
   <div class="gara">
     <table id="gara1">
       <thead><tr><th>Corsia</th><th>Nome</th><th>Quota</th></tr></thead>
-      <tbody id="body1">
-  <tr>
-    <td>1</td>
-    <td><input name="cavallo1" class="nome" style="width: 120px;" /></td>
-    <td><input name="quota1" class="quota" style="width: 60px;" /></td>
-  </tr>
-  <tr>
-    <td>2</td>
-    <td><input name="cavallo2" class="nome" style="width: 120px;" /></td>
-    <td><input name="quota2" class="quota" style="width: 60px;" /></td>
-  </tr>
-  <tr>
-    <td>3</td>
-    <td><input name="cavallo3" class="nome" style="width: 120px;" /></td>
-    <td><input name="quota3" class="quota" style="width: 60px;" /></td>
-  </tr>
-  <tr>
-    <td>4</td>
-    <td><input name="cavallo4" class="nome" style="width: 120px;" /></td>
-    <td><input name="quota4" class="quota" style="width: 60px;" /></td>
-  </tr>
-  <tr>
-    <td>5</td>
-    <td><input name="cavallo5" class="nome" style="width: 120px;" /></td>
-    <td><input name="quota5" class="quota" style="width: 60px;" /></td>
-  </tr>
-  <tr>
-    <td>6</td>
-    <td><input name="cavallo6" class="nome" style="width: 120px;" /></td>
-    <td><input name="quota6" class="quota" style="width: 60px;" /></td>
-  </tr>
-</tbody>
+      <tbody id="body1"></tbody>
     </table>
     <button onclick="salvaGara(1)">Salva</button>
     <button onclick="pulisciTabella(1)">Pulisci Tabella</button>
     <button onclick="cercaGare()">Cerca</button>
     <button onclick="startVoiceInput()">🎙️ Detta cavalli</button>
-
-    <input type="file" id="imageUpload" accept="image/*" style="margin-bottom: 10px;">
-    <button onclick="analizzaFotoSelezionata()">📸 Estrai da foto</button>
   </div>
 </div>
 
@@ -773,55 +738,6 @@ function mostraTooltipQuote(quote, gare) {
     const data = quoteMap[val];
     const perc = ((data.podi / data.tot) * 100).toFixed(1);
     input.title = `📊 Quota ${val} → ${perc}% podio su ${data.tot} casi`;
-  });
-}
-
-function analizzaFotoSelezionata() {
-  const fileInput = document.getElementById("imageUpload");
-  const file = fileInput.files[0];
-  if (!file) {
-    alert("Seleziona prima una foto!");
-    return;
-  }
-
-  Tesseract.recognize(
-    file,
-    'ita',
-    { logger: m => console.log(m) }
-  ).then(({ data: { text } }) => {
-    console.log("Testo OCR:", text);
-    const righe = text.split("\n").map(r => r.trim()).filter(r => r);
-
-    const cavalli = [];
-    const quote = [];
-
-    righe.forEach(riga => {
-      // Cerca riga tipo: "1 Nome Cavallo 2.50 ..."
-      const match = riga.match(/^(\d+)\s+([A-Za-zÀ-ÿ\s']+?)\s+(\d+[\.,]?\d*)/);
-      if (match) {
-        const nome = capitalize(match[2].trim());
-        const quota = match[3].replace(",", ".");
-        cavalli.push(nome);
-        quote.push(quota);
-      }
-    });
-
-    for (let i = 0; i < cavalli.length && i < 6; i++) {
-      const inputNome = document.querySelector(`#gara1 input[name="cavallo${i + 1}"]`);
-      const inputQuota = document.querySelector(`#gara1 input[name="quota${i + 1}"]`);
-      if (inputNome && inputQuota) {
-        inputNome.value = cavalli[i];
-        inputQuota.value = quote[i];
-      }
-    }
-
-    const dati = getGaraData(1);
-    const gare = JSON.parse(localStorage.getItem("gare") || "[]");
-    const reportAI = analisiAIAvanzata(dati.nomi, dati.quote, gare);
-    mostraReport(reportAI.reportTesto);
-  }).catch(err => {
-    console.error("Errore OCR:", err);
-    alert("Errore durante la lettura della foto.");
   });
 }
 </script>
