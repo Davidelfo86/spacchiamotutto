@@ -79,33 +79,33 @@
       <tbody id="body1">
   <tr>
     <td>1</td>
-    <td><input name="cavallo1" class="nome" /></td>
-    <td><input name="quota1" class="quota" /></td>
+    <td><input name="cavallo1" class="nome" style="width: 120px;" /></td>
+    <td><input name="quota1" class="quota" style="width: 60px;" /></td>
   </tr>
   <tr>
     <td>2</td>
-    <td><input name="cavallo2" class="nome" /></td>
-    <td><input name="quota2" class="quota" /></td>
+    <td><input name="cavallo2" class="nome" style="width: 120px;" /></td>
+    <td><input name="quota2" class="quota" style="width: 60px;" /></td>
   </tr>
   <tr>
     <td>3</td>
-    <td><input name="cavallo3" class="nome" /></td>
-    <td><input name="quota3" class="quota" /></td>
+    <td><input name="cavallo3" class="nome" style="width: 120px;" /></td>
+    <td><input name="quota3" class="quota" style="width: 60px;" /></td>
   </tr>
   <tr>
     <td>4</td>
-    <td><input name="cavallo4" class="nome" /></td>
-    <td><input name="quota4" class="quota" /></td>
+    <td><input name="cavallo4" class="nome" style="width: 120px;" /></td>
+    <td><input name="quota4" class="quota" style="width: 60px;" /></td>
   </tr>
   <tr>
     <td>5</td>
-    <td><input name="cavallo5" class="nome" /></td>
-    <td><input name="quota5" class="quota" /></td>
+    <td><input name="cavallo5" class="nome" style="width: 120px;" /></td>
+    <td><input name="quota5" class="quota" style="width: 60px;" /></td>
   </tr>
   <tr>
     <td>6</td>
-    <td><input name="cavallo6" class="nome" /></td>
-    <td><input name="quota6" class="quota" /></td>
+    <td><input name="cavallo6" class="nome" style="width: 120px;" /></td>
+    <td><input name="quota6" class="quota" style="width: 60px;" /></td>
   </tr>
 </tbody>
     </table>
@@ -775,7 +775,7 @@ function mostraTooltipQuote(quote, gare) {
     input.title = `📊 Quota ${val} → ${perc}% podio su ${data.tot} casi`;
   });
 }
-<script>
+
 function analizzaFotoSelezionata() {
   const fileInput = document.getElementById("imageUpload");
   const file = fileInput.files[0];
