@@ -744,62 +744,12 @@ function mostraTooltipQuote(quote, gare) {
     input.title = `📊 Quota ${val} → ${perc}% podio su ${data.tot} casi`;
   });
 }
-</script>
 <script>
-window.addEventListener("DOMContentLoaded", function () {
-  const input = document.getElementById("imageUpload");
-  if (!input) return;
-
-  input.addEventListener("change", function () {
-    const file = this.files[0];
-    if (!file) return;
-
-    Tesseract.recognize(
-      file,
-      'ita',
-      { logger: m => console.log(m) }
-    ).then(({ data: { text } }) => {
-      console.log("Testo OCR:", text);
-      const righe = text.split("\n").map(r => r.trim()).filter(r => r);
-
-      const cavalli = [];
-      const quote = [];
-
-      righe.forEach(riga => {
-        const match = riga.match(/^\d+\s+([A-Za-zÀ-ÿ\s']+)\s+(\d+[\.,]?\d*)$/);
-        if (match) {
-          const nome = capitalize(match[1].trim());
-          const quota = match[2].replace(",", ".");
-          cavalli.push(nome);
-          quote.push(quota);
-        }
-      });
-
-      for (let i = 0; i < cavalli.length && i < 6; i++) {
-        const inputNome = document.querySelector(`#gara1 input[name="cavallo${i + 1}"]`);
-        const inputQuota = document.querySelector(`#gara1 input[name="quota${i + 1}"]`);
-        if (inputNome && inputQuota) {
-          inputNome.value = cavalli[i];
-          inputQuota.value = quote[i];
-        }
-      }
-
-      const dati = getGaraData(1);
-      const gare = JSON.parse(localStorage.getItem("gare") || "[]");
-      const reportAI = analisiAIAvanzata(dati.nomi, dati.quote, gare);
-      mostraReport(reportAI.reportTesto);
-    }).catch(err => {
-      console.error("Errore OCR:", err);
-      alert("Errore durante la lettura della foto.");
-    });
-  });
-});
-</script>
 function analizzaFotoSelezionata() {
-  const input = document.getElementById("imageUpload");
-  const file = input.files[0];
+  const fileInput = document.getElementById("imageUpload");
+  const file = fileInput.files[0];
   if (!file) {
-    alert("Per favore seleziona una foto prima.");
+    alert("Seleziona prima una foto!");
     return;
   }
 
