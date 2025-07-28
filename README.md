@@ -746,50 +746,52 @@ function mostraTooltipQuote(quote, gare) {
 }
 </script>
 <script>
-document.getElementById("imageUpload").addEventListener("change", function () {
-  const file = this.files[0];
-  if (!file) return;
+window.addEventListener("DOMContentLoaded", function () {
+  const input = document.getElementById("imageUpload");
+  if (!input) return;
 
-  Tesseract.recognize(
-    file,
-    'ita', // usa 'eng' se il testo è più leggibile in inglese
-    { logger: m => console.log(m) }
-  ).then(({ data: { text } }) => {
-    console.log("Testo OCR:", text);
-    const righe = text.split("\n").map(r => r.trim()).filter(r => r);
+  input.addEventListener("change", function () {
+    const file = this.files[0];
+    if (!file) return;
 
-    const cavalli = [];
-    const quote = [];
+    Tesseract.recognize(
+      file,
+      'ita',
+      { logger: m => console.log(m) }
+    ).then(({ data: { text } }) => {
+      console.log("Testo OCR:", text);
+      const righe = text.split("\n").map(r => r.trim()).filter(r => r);
 
-    righe.forEach(riga => {
-      // Cerca pattern tipo: "1 NomeCavallo 2.50"
-      const match = riga.match(/^\d+\s+([A-Za-zÀ-ÿ\s']+)\s+(\d+[\.,]?\d*)$/);
-      if (match) {
-        const nome = capitalize(match[1].trim());
-        const quota = match[2].replace(",", ".");
-        cavalli.push(nome);
-        quote.push(quota);
+      const cavalli = [];
+      const quote = [];
+
+      righe.forEach(riga => {
+        const match = riga.match(/^\d+\s+([A-Za-zÀ-ÿ\s']+)\s+(\d+[\.,]?\d*)$/);
+        if (match) {
+          const nome = capitalize(match[1].trim());
+          const quota = match[2].replace(",", ".");
+          cavalli.push(nome);
+          quote.push(quota);
+        }
+      });
+
+      for (let i = 0; i < cavalli.length && i < 6; i++) {
+        const inputNome = document.querySelector(`#gara1 input[name="cavallo${i + 1}"]`);
+        const inputQuota = document.querySelector(`#gara1 input[name="quota${i + 1}"]`);
+        if (inputNome && inputQuota) {
+          inputNome.value = cavalli[i];
+          inputQuota.value = quote[i];
+        }
       }
+
+      const dati = getGaraData(1);
+      const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+      const reportAI = analisiAIAvanzata(dati.nomi, dati.quote, gare);
+      mostraReport(reportAI.reportTesto);
+    }).catch(err => {
+      console.error("Errore OCR:", err);
+      alert("Errore durante la lettura della foto.");
     });
-
-    // Riempie la tabella
-    for (let i = 0; i < cavalli.length && i < 6; i++) {
-      const inputNome = document.querySelector(`#gara1 input[name="cavallo${i + 1}"]`);
-      const inputQuota = document.querySelector(`#gara1 input[name="quota${i + 1}"]`);
-      if (inputNome && inputQuota) {
-        inputNome.value = cavalli[i];
-        inputQuota.value = quote[i];
-      }
-    }
-
-    // Avvia subito l’analisi AI
-    const dati = getGaraData(1);
-    const gare = JSON.parse(localStorage.getItem("gare") || "[]");
-    const reportAI = analisiAIAvanzata(dati.nomi, dati.quote, gare);
-    mostraReport(reportAI.reportTesto);
-  }).catch(err => {
-    console.error("Errore OCR:", err);
-    alert("Errore durante la lettura della foto.");
   });
 });
 </script>
