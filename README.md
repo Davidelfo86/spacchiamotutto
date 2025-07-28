@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Archivio Gare Cavalli</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2/dist/tesseract.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -81,6 +82,9 @@
     <button onclick="pulisciTabella(1)">Pulisci Tabella</button>
     <button onclick="cercaGare()">Cerca</button>
     <button onclick="startVoiceInput()">🎙️ Detta cavalli</button>
+
+    <label for="imageUpload">📸 Estrai da foto</label>
+    <input type="file" id="imageUpload" accept="image/*" style="display: block; margin-top: 5px;">
   </div>
 </div>
 
@@ -740,6 +744,54 @@ function mostraTooltipQuote(quote, gare) {
     input.title = `📊 Quota ${val} → ${perc}% podio su ${data.tot} casi`;
   });
 }
+</script>
+<script>
+document.getElementById("imageUpload").addEventListener("change", function () {
+  const file = this.files[0];
+  if (!file) return;
+
+  Tesseract.recognize(
+    file,
+    'ita', // usa 'eng' se il testo è più leggibile in inglese
+    { logger: m => console.log(m) }
+  ).then(({ data: { text } }) => {
+    console.log("Testo OCR:", text);
+    const righe = text.split("\n").map(r => r.trim()).filter(r => r);
+
+    const cavalli = [];
+    const quote = [];
+
+    righe.forEach(riga => {
+      // Cerca pattern tipo: "1 NomeCavallo 2.50"
+      const match = riga.match(/^\d+\s+([A-Za-zÀ-ÿ\s']+)\s+(\d+[\.,]?\d*)$/);
+      if (match) {
+        const nome = capitalize(match[1].trim());
+        const quota = match[2].replace(",", ".");
+        cavalli.push(nome);
+        quote.push(quota);
+      }
+    });
+
+    // Riempie la tabella
+    for (let i = 0; i < cavalli.length && i < 6; i++) {
+      const inputNome = document.querySelector(`#gara1 input[name="cavallo${i + 1}"]`);
+      const inputQuota = document.querySelector(`#gara1 input[name="quota${i + 1}"]`);
+      if (inputNome && inputQuota) {
+        inputNome.value = cavalli[i];
+        inputQuota.value = quote[i];
+      }
+    }
+
+    // Avvia subito l’analisi AI
+    const dati = getGaraData(1);
+    const gare = JSON.parse(localStorage.getItem("gare") || "[]");
+    const reportAI = analisiAIAvanzata(dati.nomi, dati.quote, gare);
+    mostraReport(reportAI.reportTesto);
+  }).catch(err => {
+    console.error("Errore OCR:", err);
+    alert("Errore durante la lettura della foto.");
+  });
+});
 </script>
 </body>
 </html>
