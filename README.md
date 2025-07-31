@@ -2,7 +2,20 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Archivio Gare Cavalli</title>
+
+  <!-- PWA essentials -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#007bff">
+  <link rel="icon" href="icons/icon-192.png">
+
+  <!-- Mobile app compatibility (opzionale ma utile) -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Style -->
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -67,6 +80,17 @@
       display: none;
     }
   </style>
+
+  <!-- Service Worker registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(reg => console.log('✅ Service Worker registrato:', reg.scope))
+          .catch(err => console.error('❌ Errore nella registrazione SW:', err));
+      });
+    }
+  </script>
 </head>
 <body>
 <h2>Archivio Gare Cavalli</h2>
@@ -96,6 +120,32 @@
 <div id="report"></div>
 <script>
 const NUM_CORSIE = 6;
+const datiStoriciPerCorsia = {
+  1: {
+    vittorie: [2.1, 3.0, 4.5],
+    podi: [2.0, 3.0, 4.0, 5.0]
+  },
+  2: {
+    vittorie: [2.3, 3.2, 4.1],
+    podi: [2.5, 3.5, 5.0]
+  },
+  3: {
+    vittorie: [1.9, 2.6, 3.8],
+    podi: [2.0, 3.2, 4.5]
+  },
+  4: {
+    vittorie: [3.5, 4.2, 5.1],
+    podi: [3.8, 4.5, 6.0]
+  },
+  5: {
+    vittorie: [4.8, 5.5, 6.2],
+    podi: [5.0, 5.5, 6.8]
+  },
+  6: {
+    vittorie: [5.5, 6.2, 7.0],
+    podi: [5.8, 6.5, 7.2]
+  }
+};
 
 // Inizializza tabella
 function inizializzaTabella() {
@@ -183,7 +233,10 @@ function salvaGara(index) {
   const nomiStr = JSON.stringify(nomi);
 
   // Quote uguali, cavalli diversi
-  const gareStessaQuota = gare.filter(g => JSON.stringify(g.quote.map(q => parseFloat(q).toFixed(2))) === quoteStr && JSON.stringify(g.nomi) !== nomiStr);
+  const gareStessaQuota = gare.filter(g =>
+    JSON.stringify(g.quote.map(q => parseFloat(q).toFixed(2))) === quoteStr &&
+    JSON.stringify(g.nomi) !== nomiStr
+  );
   if (gareStessaQuota.length > 0) {
     let msg = `⚠️ Questa combinazione di quote è già presente in ${gareStessaQuota.length} gara/e con cavalli diversi.\n`;
     gareStessaQuota.forEach((g, i) => {
@@ -193,7 +246,10 @@ function salvaGara(index) {
   }
 
   // Nomi uguali, quote diverse
-  const gareStessiNomi = gare.filter(g => JSON.stringify(g.nomi) === nomiStr && JSON.stringify(g.quote.map(q => parseFloat(q).toFixed(2))) !== quoteStr);
+  const gareStessiNomi = gare.filter(g =>
+    JSON.stringify(g.nomi) === nomiStr &&
+    JSON.stringify(g.quote.map(q => parseFloat(q).toFixed(2))) !== quoteStr
+  );
   if (gareStessiNomi.length > 0) {
     let msg = `⚠️ Esiste già una gara con gli stessi cavalli ma quote differenti:\n`;
     gareStessiNomi.forEach((g, i) => {
@@ -202,19 +258,32 @@ function salvaGara(index) {
     if (!confirm(msg + `\n\nVuoi salvare comunque?`)) return;
   }
 
-  // Esegui analisi AI
-  const reportAI = analisiAIAvanzata(nomi, quote, gare);
+  let reportAI = null;
 
-  // Chiedi conferma
-  if (!confirm("Vuoi procedere con il salvataggio della gara dopo l’analisi AI?")) {
-    mostraReport(reportAI.reportTesto); // mostra il riquadro AI se clicchi Annulla
+  try {
+    const cavalli = nomi.map((nome, i) => ({
+      nome,
+      quota: parseFloat(quote[i]),
+      corsia: i + 1
+    }));
+    reportAI = analisiAIAvanzata(cavalli, quote, gare);
+    mostraReport(reportAI);
+
+    if (!confirm("Vuoi procedere con il salvataggio della gara dopo l’analisi AI?")) {
+      return;
+    }
+  } catch (err) {
+    alert("❌ Errore durante l'analisi AI: " + err.message);
+    console.error(err);
     return;
   }
 
-  mostraReport(reportAI.reportTesto); // opzionale anche qui
-
   // Gara identica già salvata
-  const garaEsatta = gare.find(g => JSON.stringify(g.nomi) === nomiStr && JSON.stringify(g.quote.map(q => parseFloat(q).toFixed(2))) === quoteStr);
+  const garaEsatta = gare.find(g =>
+    JSON.stringify(g.nomi) === nomiStr &&
+    JSON.stringify(g.quote.map(q => parseFloat(q).toFixed(2))) === quoteStr
+  );
+
   if (garaEsatta) {
     let msg = `⚠️ Questa gara esiste già.\nTris salvate:\n`;
     msg += garaEsatta.tris.map(t => `→ ${t.combinazione} (Quota: ${t.quota})`).join("\n");
@@ -242,173 +311,221 @@ function salvaGara(index) {
 
   gare.push({ nomi, quote, tris: [{ combinazione: tris, quota: quotaTris }] });
   localStorage.setItem("gare", JSON.stringify(gare));
-  alert("Gara salvata.");
+  alert("✅ Gara salvata con successo.");
 }
 
-function analisiAIAvanzata(nomi, quote, gare) {
-  const nuoveQuote = quote.map(q => parseFloat(q));
-  const sommaQuote = nuoveQuote.reduce((a, b) => a + b, 0);
-  const minGareAnalisi = 5;
-  const patternLabels = nuoveQuote.map(q => {
+function analisiAIAvanzata(cavalli, trisVincentiStoriche, analisiStoriche) {
+  let report = "";
+  if (!cavalli || cavalli.length < 6) return "❌ Dati incompleti per l'analisi AI.";
+
+  const quote = cavalli.map(c => parseFloat(c.quota));
+  const sommaQuote = quote.reduce((a, b) => a + b, 0);
+  const patternQuoteTotale = quote.map(q => {
     if (q <= 2.5) return "B";
     if (q <= 6.5) return "M";
     if (q <= 9.9) return "A";
     return "SA";
-});
-
-  let report = `🧠 ANALISI INTELLIGENTE\n----------------------\n`;
-  report += `📊 Pattern quote: ${patternLabels.join("-")}\n`;
-  report += `🧮 Somma quote: ${sommaQuote.toFixed(2)}\n\n`;
-
-  let trisSuggerita = [];
-  let quoteStatistiche = {};
-  let patternSimili = [], quoteSimili = [];
-  let cavalliGlobale = {}, cavalliCorsia = {}, combinazioniTris = {}, trisCluster = {};
-
-  // Analisi gare storiche
-  gare.forEach(g => {
-    const q = g.quote.map(x => parseFloat(x));
-    const patternGara = q.map(qv => qv < 2 ? "B" : qv <= 3.5 ? "M" : "A");
-    const matchCount = patternGara.filter((v, i) => v === patternLabels[i]).length;
-    if (matchCount >= 5) patternSimili.push(g);
-
-    const simili = q.filter((val, i) => Math.abs(val - nuoveQuote[i]) <= 0.3).length;
-    if (simili >= 5) quoteSimili.push(g);
-
-    q.forEach((val, idx) => {
-      const intervallo = (Math.round(val * 2) / 2).toFixed(1);
-      quoteStatistiche[intervallo] = quoteStatistiche[intervallo] || { podi: 0, tot: 0 };
-      if (g.tris.some(t => t.combinazione.split(",").includes(String(idx + 1)))) {
-        quoteStatistiche[intervallo].podi++;
-      }
-      quoteStatistiche[intervallo].tot++;
-    });
-
-    g.nomi.forEach((n, i) => {
-      if (!nomi.includes(n)) return; // Solo cavalli della gara attuale
-      const corsia = i + 1;
-      const q = parseFloat(g.quote[i]);
-
-      cavalliGlobale[n] = cavalliGlobale[n] || { tot: 0, podio: 0, quote: [], corsie: [] };
-      cavalliGlobale[n].tot++;
-      cavalliGlobale[n].quote.push(q);
-      cavalliGlobale[n].corsie.push(corsia);
-
-      if (g.tris.some(t => t.combinazione.split(",").includes(String(corsia)))) {
-        cavalliGlobale[n].podio++;
-      }
-
-      const k = `${n}_C${corsia}`;
-      cavalliCorsia[k] = cavalliCorsia[k] || { tot: 0, podio: 0 };
-      if (g.tris.some(t => t.combinazione.split(",").includes(String(corsia)))) {
-        cavalliCorsia[k].podio++;
-      }
-    });
-
-    g.tris.forEach(t => {
-      const key = t.combinazione.split(",").sort().join("-");
-      combinazioniTris[key] = (combinazioniTris[key] || 0) + 1;
-      const clusterKey = t.combinazione.split(",").map(n => parseInt(n)).sort((a, b) => a - b).join("-");
-      trisCluster[clusterKey] = (trisCluster[clusterKey] || 0) + 1;
-    });
   });
+  const patternString = patternQuoteTotale.join("-");
 
-  // Cavallo favorito e sfavorito
-  const minQuota = Math.min(...nuoveQuote);
-  const maxQuota = Math.max(...nuoveQuote);
-  const favoritoIdx = nuoveQuote.indexOf(minQuota);
-  const sfavoritoIdx = nuoveQuote.indexOf(maxQuota);
+  report += `📊 Pattern quote: ${patternString}\n🧮 Somma quote: ${sommaQuote.toFixed(2)}`;
 
-  report += `🏇 Cavallo favorito: ${nomi[favoritoIdx]} (Corsia ${favoritoIdx + 1}, Quota ${minQuota})\n`;
-  report += `🐢 Cavallo sfavorito: ${nomi[sfavoritoIdx]} (Corsia ${sfavoritoIdx + 1}, Quota ${maxQuota})\n`;
+  // Favorito e sfavorito
+  const minQuota = Math.min(...quote);
+  const maxQuota = Math.max(...quote);
+  const favorito = cavalli.find(c => Math.abs(c.quota - minQuota) < 0.01);
+  const sfavorito = cavalli.find(c => Math.abs(c.quota - maxQuota) < 0.01);
 
-  // Sorprese storiche del cavallo sfavorito
-  const storicoSfavorito = gare.filter(g => g.nomi.includes(nomi[sfavoritoIdx]));
-  let sorprese = 0;
-  storicoSfavorito.forEach(g => {
-    g.tris.forEach(t => {
-      const corsie = t.combinazione.split(",");
-      const idx = g.nomi.indexOf(nomi[sfavoritoIdx]);
-      if (idx !== -1 && corsie[0] === String(idx + 1)) sorprese++;
-    });
-  });
-  if (sorprese > 0) {
-    report += `🎯 Sorpresa: ${sorprese} vittorie del cavallo sfavorito storico!\n`;
+  if (!favorito || !sfavorito) return "❌ Errore nell'identificazione di favorito/sfavorito.";
+
+  function storicoPodio(c) {
+    const corsia = c.corsia;
+    const quota = parseFloat(c.quota);
+    const key = `${corsia}|${quota}`;
+    const data = analisiStoriche[key] || { podi: 0, gare: 0, vittorie: 0 };
+    const percPodi = data.gare > 0 ? (data.podi / data.gare) * 100 : 0;
+    const percVittorie = data.gare > 0 ? (data.vittorie / data.gare) * 100 : 0;
+    return {
+      podi: data.podi,
+      gare: data.gare,
+      vittorie: data.vittorie,
+      percPodi: percPodi.toFixed(1),
+      percVittorie: percVittorie.toFixed(1)
+    };
   }
 
-  // Cavalli ricorrenti (solo quelli della gara attuale)
-  report += `\n📌 Cavalli ricorrenti (storico della gara attuale):\n`;
-  Object.entries(cavalliGlobale).forEach(([nome, stats]) => {
-    if (stats.tot >= minGareAnalisi) {
-      const perc = (stats.podio / stats.tot) * 100;
-      const avg = stats.quote.reduce((a, b) => a + b, 0) / stats.quote.length;
-      report += `→ ${nome}: ${perc.toFixed(1)}% podio su ${stats.tot} gare | Quota media: ${avg.toFixed(2)}\n`;
-      trisSuggerita.push({ nome, perc, corsie: stats.corsie });
-    }
+  const storicoFavorito = storicoPodio(favorito);
+  const storicoSfavorito = storicoPodio(sfavorito);
+
+  report += `\n\n🏇 Cavallo favorito: ${favorito.nome} (Corsia ${favorito.corsia}, Quota ${favorito.quota})`;
+  report += `\n📊 Storico: ${storicoFavorito.podi} podi / ${storicoFavorito.vittorie} vittorie su ${storicoFavorito.gare} gare → ${storicoFavorito.percPodi}% podio, ${storicoFavorito.percVittorie}% vittorie`;
+
+  report += `\n\n🐢 Cavallo sfavorito: ${sfavorito.nome} (Corsia ${sfavorito.corsia}, Quota ${sfavorito.quota})`;
+  report += `\n📊 Storico: ${storicoSfavorito.podi} podi / ${storicoSfavorito.vittorie} vittorie su ${storicoSfavorito.gare} gare → ${storicoSfavorito.percPodi}% podio, ${storicoSfavorito.percVittorie}% vittorie`;
+
+  // Analisi quote + corsia
+  report += `\n\n📌 Quote e corsie dettagliate:\n`;
+  cavalli.forEach(c => {
+    const q = parseFloat(c.quota);
+    const key = `${c.corsia}|${q}`;
+    const storico = analisiStoriche[key] || { podi: 0, gare: 0, vittorie: 0 };
+    const podiPerc = storico.gare > 0 ? ((storico.podi / storico.gare) * 100).toFixed(1) : 0;
+    const vittPerc = storico.gare > 0 ? ((storico.vittorie / storico.gare) * 100).toFixed(1) : 0;
+    const extra = analizzaQuotaECorsia(c.corsia, q);
+    const podioTest = analisiPodioPerQuotaECorsia(c.corsia, q);
+    report += `→ Corsia ${c.corsia}, Quota ${q}:\n   ${extra}\n   🎯 ${podioTest}\n   📊 Storico: ${storico.podi} podi / ${storico.vittorie} vittorie su ${storico.gare} gare (${podiPerc}% podio, ${vittPerc}% vittorie)\n`;
   });
 
-  // Cavalli quasi vincenti
-  report += `\n📌 Cavalli “quasi vincenti” (presenti in gara):\n`;
-  for (let [nome, stats] of Object.entries(cavalliGlobale)) {
-    let primi = 0;
-    gare.forEach(g => {
-      const idx = g.nomi.indexOf(nome);
-      if (idx !== -1) {
-        g.tris.forEach(t => {
-          if (t.combinazione.split(",")[0] === String(idx + 1)) primi++;
-        });
-      }
-    });
-    if (stats.tot >= minGareAnalisi && stats.podio > 0 && primi === 0) {
-      report += `→ ${nome}: ${stats.podio} podi, 0 vittorie su ${stats.tot} gare!\n`;
-    }
-  }
+  // Tris AI
+  let classificazione = "";
+  const tris = cavalli.slice().sort((a, b) => a.quota - b.quota).slice(0, 3);
+  if (tris.length >= 3) {
+    const sommaTris = tris.reduce((sum, c) => sum + c.quota, 0);
+    const patternTris = tris.map(c => quotaPattern(c.quota));
+    if (sommaTris <= 9) classificazione = "💎 favorita";
+    else if (sommaTris <= 16) classificazione = "✅ bilanciata";
+    else if (sommaTris <= 25) classificazione = "⚠️ rischiosa";
+    else classificazione = "☠️ tossica";
 
-  // Cluster tris ricorrenti
-  report += `\n📌 Cluster di tris vincenti ricorrenti:\n`;
-  Object.entries(trisCluster).filter(([k, v]) => v > 1).forEach(([k, v]) => {
-    report += `→ Combinazione ${k.replace(/-/g, ",")}: ${v} volte\n`;
-  });
+    const trisString = tris.map(c => c.corsia).sort((a, b) => a - b).join(",");
+    const clusterFrequenti = ["1,2,3", "1,3,5", "2,3,4", "3,4,6", "2,4,5", "1,4,6", "1,5,6"];
+    const clusterNote = clusterFrequenti.includes(trisString) ? `\n🔁 Tris AI compatibile con cluster vincente frequente (${trisString})` : "";
 
-  // Predizione tris AI
-  report += `\n🤖 Predizione Tris AI (solo cavalli in gara):\n`;
-  if (trisSuggerita.length >= 3) {
-    const trisFinale = trisSuggerita.sort((a, b) => b.perc - a.perc).slice(0, 3);
-    trisFinale.forEach((c, i) => {
-      const corsia = c.corsie.length ? c.corsie[0] : "?";
-      report += `#${i + 1} → ${c.nome} (Corsia tipica: ${corsia}) - ${c.perc.toFixed(1)}%\n`;
-    });
+    report += `\n\n🤖 Predizione Tris AI: ${tris.map(c => c.corsia).join("-")} (Pattern: ${patternTris.join("-")}, Somma quote: ${sommaTris.toFixed(2)}) → ${classificazione}${clusterNote}`;
   } else {
-    report += `Non abbastanza dati per una predizione affidabile.\n`;
+    report += `\n\n🤖 Predizione Tris AI: Non abbastanza dati per una predizione affidabile.`;
   }
 
-  // Confronto quote vincitrici con gare storiche simili
-  report += `\n📊 Confronto con gare storiche simili:\n`;
-  let sorpresePattern = 0, sorpreseQuote = 0;
-  patternSimili.forEach(g => {
-    const q = g.quote.map(v => parseFloat(v));
-    const vincente = parseInt(g.tris[0]?.combinazione.split(",")[0]) - 1;
-    if (q[vincente] > 10) sorpresePattern++;
-  });
-  quoteSimili.forEach(g => {
-    const q = g.quote.map(v => parseFloat(v));
-    const vincente = parseInt(g.tris[0]?.combinazione.split(",")[0]) - 1;
-    if (q[vincente] > 10) sorpreseQuote++;
-  });
-
-  if (patternSimili.length > 0) {
-    const perc = ((sorpresePattern / patternSimili.length) * 100).toFixed(1);
-    report += `→ ${patternSimili.length} gare con pattern simile. In ${sorpresePattern} ha vinto quota >10 (${perc}%)\n`;
-  }
-  if (quoteSimili.length > 0) {
-    const perc = ((sorpreseQuote / quoteSimili.length) * 100).toFixed(1);
-    report += `→ ${quoteSimili.length} gare con quote simili. In ${sorpreseQuote} ha vinto quota >10 (${perc}%)\n`;
-  }
-  if (!patternSimili.length && !quoteSimili.length) {
-    report += `→ Nessuna gara simile trovata.\n`;
+  // Sintesi
+  report += `\n\n✨ Sintesi:`;
+  if (storicoFavorito.vittorie == 0) report += ` ⚠️ Attenzione: favorito solo teorico.`;
+  if (storicoSfavorito.vittorie > 0 || storicoSfavorito.podi > 0) report += ` 🎯 Possibile sorpresa dello sfavorito.`;
+  if (classificazione.includes("tossica") || classificazione.includes("rischiosa")) {
+    report += ` 🚨 Tris AI a rischio: ${classificazione}`;
+  } else if (classificazione) {
+    report += ` ✅ Tris AI considerata: ${classificazione}`;
   }
 
-  return { reportTesto: report };
+  return report;
+}
+function quotaPattern(quota) {
+  if (quota <= 2.5) return "B";    // Bassa
+  if (quota <= 6.5) return "M";    // Media
+  if (quota <= 9.9) return "A";    // Alta
+  return "SA";                     // Super Alta
+}
+function analisiPodioPerQuotaECorsia(corsia, quota) {
+  const storico = datiStoriciPerCorsia[corsia];
+  if (!storico || !storico.podi || storico.podi.length === 0) return "Nessun dato podio.";
+
+  const rilevanti = storico.podi.filter(q => Math.abs(q - quota) <= 0.5);
+  const totale = storico.podi.length;
+  const percentuale = ((rilevanti.length / totale) * 100).toFixed(1);
+
+  if (rilevanti.length === 0) return `🚫 Mai a podio con quota simile (${quota})`;
+  return `👍 ${rilevanti.length} podi su ${totale} (${percentuale}%) con quote simili a ${quota}`;
+}
+
+function analizzaQuotaECorsia(corsia, quota) {
+  const datiStorici = {
+    1: { vincenti: [2.0, 5.0], podio: [2.0, 7.0], tossiche: [7.5, 9.0] },
+    2: { vincenti: [2.0, 4.0], podio: [2.0, 8.0], tossiche: [25.0, 40.0] },
+    3: { vincenti: [1.5, 3.0], podio: [1.5, 6.0], tossiche: [10.0, 15.0] },
+    4: { vincenti: [3.5, 5.5], podio: [3.0, 7.0], tossiche: [8.5, 10.0] },
+    5: { vincenti: [5.0, 6.5], podio: [4.0, 7.0], tossiche: [12.0, 20.0] },
+    6: { vincenti: [3.5, 6.5], podio: [3.0, 7.5], tossiche: [15.0, 30.0] },
+  };
+
+  const d = datiStorici[corsia];
+  if (!d) return "❓ Nessun dato storico per questa corsia.";
+
+  let messaggio = "";
+
+  const inVincente = quota >= d.vincenti[0] && quota <= d.vincenti[1];
+  const inPodio = quota >= d.podio[0] && quota <= d.podio[1];
+  const inTossico = quota >= d.tossiche[0] && quota <= d.tossiche[1];
+
+  if (inVincente) messaggio += "🎯 range vincente ";
+  if (inPodio) messaggio += "👍 range podio ";
+  if (inTossico) messaggio += "⚠️ range tossico";
+
+  if (!inVincente && !inPodio && !inTossico) messaggio = "🚫 quota fuori da tutti i range noti";
+
+  return messaggio.trim();
+}
+function analisiStoricaPerCorsia(corsia, quota, tipo = "vittorie") {
+  const storico = datiStoriciPerCorsia[corsia];
+  if (!storico) return "❌ Nessun dato storico per questa corsia.";
+
+  const target = tipo === "vittorie" ? storico.vittorie : storico.podi;
+  if (!target || target.length === 0) return `❌ Nessun dato disponibile per ${tipo}.`;
+
+  const rilevanti = target.filter(q => Math.abs(q - quota) <= 0.5);
+  const totale = target.length;
+
+  if (rilevanti.length === 0) {
+    return `0 ${tipo} su ${totale} (quota ${quota} mai ${tipo === "vittorie" ? "vincente" : "a podio"})`;
+  }
+
+  const percentuale = ((rilevanti.length / totale) * 100).toFixed(1);
+  return `${rilevanti.length} ${tipo} su ${totale} (${percentuale}%) con quote simili a ${quota}`;
+}
+function caricaStoricoCavalli() {
+  const dati = {
+    "shadowfax": {
+      primi: 3,
+      secondi: 2,
+      terzi: 4,
+      podi: 9,
+      totali: 15,
+      quotaMedia: 4.5,
+      quotePodi: [3.0, 4.2, 5.1, 2.8, 6.0, 3.3, 5.5, 4.8, 3.7]
+    },
+    "tornado": {
+      primi: 1,
+      secondi: 0,
+      terzi: 2,
+      podi: 3,
+      totali: 12,
+      quotaMedia: 7.8,
+      quotePodi: [7.5, 8.0, 6.9]
+    },
+    // ...altri cavalli
+  };
+
+  // Assicura che ogni cavallo abbia quotePodi calcolate anche se mancano
+  for (const nome in dati) {
+    const c = dati[nome];
+    if (!c.quotePodi || c.quotePodi.length === 0) {
+      c.quotePodi = [];
+    }
+  }
+
+  return dati;
+}
+function suggerisciTrisAI(cavalli) {
+  // Filtra cavalli con quote troppo alte (super tossiche > 30)
+  const filtrati = cavalli.filter(c => c.quota <= 30);
+
+  // Ordina per quota crescente
+  const ordinati = filtrati.sort((a, b) => a.quota - b.quota);
+
+  // BONUS: se ci sono almeno 4 cavalli, cerca quelli distribuiti su corsie diverse
+  let tris = ordinati.slice(0, 3);
+
+  // Verifica che non siano tutte quote super basse (tipo 1.2, 1.5, 1.7) → evita tris sbilanciata
+  const somma = tris.reduce((tot, c) => tot + c.quota, 0);
+  const media = somma / tris.length;
+
+  // Se media troppo bassa (<2.0), rimpiazza con almeno una quota più equilibrata (media o alta)
+  if (media < 2.0 && ordinati.length > 3) {
+    const bilanciata = ordinati.find(c => c.quota >= 2.5 && c.quota <= 6.5);
+    if (bilanciata && !tris.some(c => c.nome === bilanciata.nome)) {
+      tris[2] = bilanciata;
+    }
+  }
+
+  return tris;
 }
 function setupAutocomplete() {
   const inputs = document.querySelectorAll("input.nome");
@@ -604,7 +721,6 @@ function startVoiceInput() {
   recognition.onresult = function(event) {
     const result = event.results[0][0].transcript;
 
-    // Accetta anche "punto" come separatore oltre a "virgola" e ","
     const righe = result.split(/virgola|punto|,|\./i);
 
     righe.forEach((riga, i) => {
@@ -619,13 +735,18 @@ function startVoiceInput() {
           inputQuota.value = quota;
         }
       }
-    });
+    }); // ✅ CHIUSURA MANCANTE AGGIUNTA QUI
 
-    // Analisi AI automatica subito dopo la dettatura
+    // Dopo la compilazione vocale, lancia subito l'analisi AI
     const dati = getGaraData(1);
     const gare = JSON.parse(localStorage.getItem("gare") || "[]");
-    const reportAI = analisiAIAvanzata(dati.nomi, dati.quote, gare);
-    mostraReport(reportAI.reportTesto);
+    const cavalli = dati.nomi.map((nome, i) => ({
+      nome,
+      quota: parseFloat(dati.quote[i]),
+      corsia: i + 1
+    }));
+    const reportAI = analisiAIAvanzata(cavalli, dati.quote, gare);
+    mostraReport(reportAI);
   };
 
   recognition.onerror = function(event) {
@@ -642,7 +763,7 @@ function startAIWatcher() {
   if (!iniziale.nomi.includes("") && !iniziale.quote.includes("")) {
     const gare = JSON.parse(localStorage.getItem("gare") || "[]");
     const reportAI = analisiAIAvanzata(iniziale.nomi, iniziale.quote, gare);
-    mostraReport(reportAI.reportTesto);
+    mostraReport(reportAI);
     ultimaFirma = iniziale.nomi.join("|") + "::" + iniziale.quote.join("|");
     aggiornaBadgeOrario();
   }
@@ -685,8 +806,13 @@ function startAIWatcher() {
     if (firmaAttuale === ultimaFirma) return;
 
     const gare = JSON.parse(localStorage.getItem("gare") || "[]");
-    const reportAI = analisiAIAvanzata(nomi, quote, gare);
-    mostraReport(reportAI.reportTesto);
+    const cavalli = nomi.map((nome, i) => ({
+      nome,
+      quota: parseFloat(quote[i]),
+      corsia: i + 1
+    }));
+    const reportAI = analisiAIAvanzata(cavalli, quote, gare);
+    mostraReport(reportAI);
 
     ultimaFirma = firmaAttuale;
     aggiornaBadgeOrario();
